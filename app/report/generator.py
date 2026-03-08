@@ -54,6 +54,7 @@ def generate_pdf_report(
     metadata: dict,
     visual: dict,
     audio: dict,
+    signal: dict,
     verdict: dict,
     elapsed: float,
 ):
@@ -80,7 +81,7 @@ def generate_pdf_report(
     story.append(Spacer(1, 6 * mm))
 
     # ── Score Breakdown ──
-    story += _build_score_table(metadata, visual, audio, verdict, styles)
+    story += _build_score_table(metadata, visual, audio, signal, verdict, styles)
     story.append(Spacer(1, 6 * mm))
 
     # ── Metadata Section ──
@@ -107,6 +108,15 @@ def generate_pdf_report(
         audio,
         styles,
         extra_table=_audio_details_table(audio.get("details", {}), styles),
+    )
+    story.append(Spacer(1, 5 * mm))
+
+    # ── Signal Physics Section ──
+    story += _build_section(
+        "4. Signal Physics Analysis (Sensor / Motion / Frequency)",
+        signal,
+        styles,
+        extra_table=_metadata_details_table(signal.get("details", {}), styles),
     )
     story.append(Spacer(1, 8 * mm))
 
@@ -215,13 +225,14 @@ def _build_verdict_banner(verdict: dict, styles):
     return [banner]
 
 
-def _build_score_table(metadata, visual, audio, verdict, styles):
+def _build_score_table(metadata, visual, audio, signal, verdict, styles):
     elements = [Paragraph("Score Breakdown", styles["SectionTitle"])]
 
     breakdown = verdict.get("breakdown", {})
-    meta_score  = metadata.get("manipulation_score", 0.0)
+    meta_score   = metadata.get("manipulation_score", 0.0)
     visual_score = visual.get("deepfake_probability", 0.0)
     audio_score  = audio.get("sync_anomaly_score", 0.0)
+    signal_score = signal.get("ai_signal_score", 0.0)
 
     def score_cell(score):
         pct = int(score * 100)
@@ -247,23 +258,30 @@ def _build_score_table(metadata, visual, audio, verdict, styles):
         [
             Paragraph("Metadata", styles["TableCell"]),
             score_cell(meta_score),
-            Paragraph("25%", styles["TableCell"]),
+            Paragraph("20%", styles["TableCell"]),
             Paragraph(f"{breakdown.get('metadata_contribution', 0):.3f}", styles["TableCell"]),
             Paragraph(str(len(metadata.get("flags", []))), styles["TableCell"]),
         ],
         [
             Paragraph("Visual / Frames", styles["TableCell"]),
             score_cell(visual_score),
-            Paragraph("50%", styles["TableCell"]),
+            Paragraph("20%", styles["TableCell"]),
             Paragraph(f"{breakdown.get('visual_contribution', 0):.3f}", styles["TableCell"]),
             Paragraph(str(len(visual.get("flags", []))), styles["TableCell"]),
         ],
         [
             Paragraph("Audio Sync", styles["TableCell"]),
             score_cell(audio_score),
-            Paragraph("25%", styles["TableCell"]),
+            Paragraph("20%", styles["TableCell"]),
             Paragraph(f"{breakdown.get('audio_contribution', 0):.3f}", styles["TableCell"]),
             Paragraph(str(len(audio.get("flags", []))), styles["TableCell"]),
+        ],
+        [
+            Paragraph("Signal Physics", styles["TableCell"]),
+            score_cell(signal_score),
+            Paragraph("40%", styles["TableCell"]),
+            Paragraph(f"{breakdown.get('signal_contribution', 0):.3f}", styles["TableCell"]),
+            Paragraph(str(len(signal.get("flags", []))), styles["TableCell"]),
         ],
     ]
 

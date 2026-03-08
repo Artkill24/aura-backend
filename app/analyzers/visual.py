@@ -1,40 +1,49 @@
 """
-AURA — Visual Analyzer
-Frame-by-frame deepfake detection using HuggingFace transformers.
-Samples frames intelligently to balance accuracy vs. speed.
+AURA — Visual Analyzer v2
+Dual-model frame analysis:
+  Model A: dima806/deepfake_vs_real_image_detection — face deepfake detector
+  Model B: umm-maybe/AI-image-detector — AI-generated scene detector
+
+Both run in parallel. Final score = weighted max of the two.
 """
 
 import asyncio
 import cv2
 import numpy as np
-from pathlib import Path
 from typing import List, Tuple
 import os
 
-# Lazy imports — only load models when needed
-_model = None
-_processor = None
+# ── Lazy-loaded models ──
+_model_a = None
+_processor_a = None
+_model_b = None
+_processor_b = None
+
+MODEL_A_ID = "dima806/deepfake_vs_real_image_detection"  # Face deepfakes
+MODEL_B_ID = "umm-maybe/AI-image-detector"               # AI-generated scenes
 
 
-def _load_model():
-    """Lazy-load the deepfake detection model."""
-    global _model, _processor
-    if _model is None:
+def _load_model_a():
+    global _model_a, _processor_a
+    if _model_a is None:
         from transformers import AutoImageProcessor, AutoModelForImageClassification
-        import torch
+        _processor_a = AutoImageProcessor.from_pretrained(MODEL_A_ID)
+        _model_a = AutoModelForImageClassification.from_pretrained(MODEL_A_ID)
+        _model_a.eval()
+    return _model_a, _processor_a
 
-        MODEL_ID = os.getenv("VISUAL_MODEL_ID", "dima806/deepfake_vs_real_image_detection")
-        _processor = AutoImageProcessor.from_pretrained(MODEL_ID)
-        _model = AutoModelForImageClassification.from_pretrained(MODEL_ID)
-        _model.eval()
-    return _model, _processor
+
+def _load_model_b():
+    global _model_b, _processor_b
+    if _model_b is None:
+        from transformers import AutoImageProcessor, AutoModelForImageClassification
+        _processor_b = AutoImageProcessor.from_pretrained(MODEL_B_ID)
+        _model_b = AutoModelForImageClassification.from_pretrained(MODEL_B_ID)
+        _model_b.eval()
+    return _model_b, _processor_b
 
 
 async def analyze_frames(video_path: str) -> dict:
-    """
-    Extracts key frames and runs deepfake classification.
-    Returns probability score + per-frame anomalies.
-    """
     result = {
         "deepfake_probability": 0.0,
         "frames_analyzed": 0,
@@ -44,10 +53,10 @@ async def analyze_frames(video_path: str) -> dict:
     }
 
     try:
-        # Extract frames in thread pool (CPU-bound)
         loop = asyncio.get_event_loop()
-        frames_data = await loop.run_in_executor(None, _extract_frames, video_path)
 
+        # Extract frames once, reuse for both models
+        frames_data = await loop.run_in_executor(None, _extract_frames, video_path)
         if not frames_data:
             result["flags"].append({
                 "type": "NO_FRAMES_EXTRACTED",
@@ -56,68 +65,96 @@ async def analyze_frames(video_path: str) -> dict:
             })
             return result
 
-        # Run inference
-        scores = await loop.run_in_executor(None, _run_inference, frames_data)
+        # Run both models in parallel via thread pool
+        scores_a, scores_b = await asyncio.gather(
+            loop.run_in_executor(None, _run_inference, frames_data, "A"),
+            loop.run_in_executor(None, _run_inference, frames_data, "B"),
+        )
 
-        if not scores:
-            return result
+        # ── Aggregate ──
+        avg_a, max_a, var_a = _aggregate(scores_a)
+        avg_b, max_b, var_b = _aggregate(scores_b)
 
-        # Aggregate results
-        deepfake_scores = [s["deepfake_prob"] for s in scores]
-        avg_score = float(np.mean(deepfake_scores))
-        max_score = float(np.max(deepfake_scores))
-        
-        # Flag frames with high anomaly
-        anomaly_frames = [
-            {
-                "frame_index": s["frame_idx"],
-                "timestamp_seconds": round(s["timestamp"], 2),
-                "deepfake_probability": round(s["deepfake_prob"], 3),
-                "label": s["label"],
-            }
-            for s in scores
-            if s["deepfake_prob"] > 0.65
-        ]
+        # Model B (AI-generated) gets higher weight — more relevant for synthetic videos
+        combined_avg = round(avg_a * 0.4 + avg_b * 0.6, 3)
+        combined_max = round(max(max_a, max_b), 3)
+
+        # ── Anomaly frames (both models) ──
+        anomaly_frames = []
+        for s in (scores_a + scores_b):
+            if s["deepfake_prob"] > 0.65:
+                anomaly_frames.append({
+                    "frame_index": s["frame_idx"],
+                    "timestamp_seconds": round(s["timestamp"], 2),
+                    "deepfake_probability": round(s["deepfake_prob"], 3),
+                    "label": s["label"],
+                    "model": s["model"],
+                })
+
+        # Deduplicate by frame_index, keep highest score
+        seen = {}
+        for f in anomaly_frames:
+            idx = f["frame_index"]
+            if idx not in seen or f["deepfake_probability"] > seen[idx]["deepfake_probability"]:
+                seen[idx] = f
+        anomaly_frames = sorted(seen.values(), key=lambda x: -x["deepfake_probability"])[:10]
 
         if anomaly_frames:
             result["flags"].append({
                 "type": "VISUAL_ANOMALY_DETECTED",
-                "detail": f"{len(anomaly_frames)} frame(s) flagged with high deepfake probability",
-                "severity": "HIGH" if max_score > 0.8 else "MEDIUM",
+                "detail": f"{len(anomaly_frames)} frame(s) flagged — deepfake or AI-generated content",
+                "severity": "HIGH" if combined_max > 0.8 else "MEDIUM",
             })
 
-        # Check for temporal inconsistency (big score swings between frames)
-        if len(deepfake_scores) > 2:
-            score_variance = float(np.var(deepfake_scores))
-            if score_variance > 0.08:
-                result["flags"].append({
-                    "type": "TEMPORAL_INCONSISTENCY",
-                    "detail": f"High variance across frames (σ²={score_variance:.3f}) — suggests partial manipulation",
-                    "severity": "MEDIUM",
-                })
+        if avg_b > 0.6:
+            result["flags"].append({
+                "type": "AI_GENERATED_SCENE",
+                "detail": f"Scene-level AI generation detected (score: {avg_b:.2f}) — video likely synthetic",
+                "severity": "HIGH",
+            })
+        elif avg_b > 0.4:
+            result["flags"].append({
+                "type": "AI_GENERATED_SCENE_POSSIBLE",
+                "detail": f"Possible AI-generated content (score: {avg_b:.2f})",
+                "severity": "MEDIUM",
+            })
+
+        if avg_a > 0.5:
+            result["flags"].append({
+                "type": "FACE_MANIPULATION_DETECTED",
+                "detail": f"Face-level deepfake detected (score: {avg_a:.2f})",
+                "severity": "HIGH",
+            })
+
+        if var_a > 0.08 or var_b > 0.08:
+            result["flags"].append({
+                "type": "TEMPORAL_INCONSISTENCY",
+                "detail": "High frame-to-frame variance — partial manipulation likely",
+                "severity": "MEDIUM",
+            })
 
         result.update({
-            "deepfake_probability": round(avg_score, 3),
-            "peak_probability": round(max_score, 3),
-            "frames_analyzed": len(scores),
-            "anomaly_frames": anomaly_frames[:10],  # Cap report entries
+            "deepfake_probability": combined_avg,
+            "peak_probability": combined_max,
+            "frames_analyzed": len(frames_data),
+            "anomaly_frames": anomaly_frames,
             "details": {
-                "model_used": os.getenv("VISUAL_MODEL_ID", "dima806/deepfake_vs_real_image_detection"),
-                "sampling_strategy": "adaptive_keyframe",
-                "avg_score": round(avg_score, 3),
-                "max_score": round(max_score, 3),
-                "variance": round(float(np.var(deepfake_scores)), 4),
+                "model_a": MODEL_A_ID,
+                "model_b": MODEL_B_ID,
+                "score_model_a_face_deepfake": round(avg_a, 3),
+                "score_model_b_ai_generated": round(avg_b, 3),
+                "combined_score": combined_avg,
+                "peak_score": combined_max,
+                "frames_analyzed": len(frames_data),
             },
         })
 
     except ImportError:
-        # Graceful fallback if transformers not installed yet
         result["flags"].append({
             "type": "MODEL_NOT_AVAILABLE",
-            "detail": "Visual model not loaded — run: pip install transformers torch",
+            "detail": "Visual models not loaded — run: pip install transformers torch",
             "severity": "INFO",
         })
-        result["deepfake_probability"] = 0.0
 
     except Exception as e:
         result["flags"].append({
@@ -129,13 +166,14 @@ async def analyze_frames(video_path: str) -> dict:
     return result
 
 
-def _extract_frames(video_path: str, max_frames: int = 20) -> List[Tuple]:
-    """
-    Adaptive frame extraction:
-    - Short videos (<30s): every 2 seconds
-    - Long videos: uniform sampling up to max_frames
-    Focus on areas where deepfakes break: first/last 5s, scene changes.
-    """
+def _aggregate(scores: list) -> tuple:
+    if not scores:
+        return 0.0, 0.0, 0.0
+    vals = [s["deepfake_prob"] for s in scores]
+    return float(np.mean(vals)), float(np.max(vals)), float(np.var(vals))
+
+
+def _extract_frames(video_path: str, max_frames: int = 16) -> List[Tuple]:
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return []
@@ -144,12 +182,7 @@ def _extract_frames(video_path: str, max_frames: int = 20) -> List[Tuple]:
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     duration = total_frames / fps
 
-    # Compute sample indices
-    if duration <= 30:
-        step = max(1, int(fps * 2))  # Every 2 seconds
-    else:
-        step = max(1, total_frames // max_frames)
-
+    step = max(1, int(fps * 2)) if duration <= 30 else max(1, total_frames // max_frames)
     sample_indices = list(range(0, total_frames, step))[:max_frames]
 
     frames = []
@@ -158,67 +191,47 @@ def _extract_frames(video_path: str, max_frames: int = 20) -> List[Tuple]:
         ret, frame = cap.read()
         if not ret:
             continue
-        # Convert BGR -> RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        timestamp = idx / fps
-        frames.append((idx, timestamp, frame_rgb))
+        frames.append((idx, idx / fps, cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
 
     cap.release()
     return frames
 
 
-def _run_inference(frames_data: List[Tuple]) -> List[dict]:
-    """Run HuggingFace model on extracted frames."""
+def _run_inference(frames_data: List[Tuple], model_key: str) -> List[dict]:
     from PIL import Image
     import torch
 
-    model, processor = _load_model()
+    model, processor = _load_model_a() if model_key == "A" else _load_model_b()
     results = []
 
     for frame_idx, timestamp, frame_rgb in frames_data:
         try:
-            image = Image.fromarray(frame_rgb)
-            inputs = processor(images=image, return_tensors="pt")
-
+            inputs = processor(images=Image.fromarray(frame_rgb), return_tensors="pt")
             with torch.no_grad():
-                outputs = model(**inputs)
-                logits = outputs.logits
-                probs = torch.softmax(logits, dim=-1)[0]
+                probs = torch.softmax(model(**inputs).logits, dim=-1)[0]
 
-            # Map label indices to meaningful names
-            id2label = model.config.id2label
-            scores = {id2label[i]: float(p) for i, p in enumerate(probs)}
-
-            # Normalize to "deepfake probability" regardless of label naming
-            deepfake_prob = _normalize_deepfake_prob(scores)
+            scores = {model.config.id2label[i]: float(p) for i, p in enumerate(probs)}
+            deepfake_prob = _normalize_prob(scores)
 
             results.append({
                 "frame_idx": frame_idx,
                 "timestamp": timestamp,
                 "deepfake_prob": deepfake_prob,
-                "label": "DEEPFAKE" if deepfake_prob > 0.5 else "REAL",
-                "raw_scores": scores,
+                "label": "FAKE" if deepfake_prob > 0.5 else "REAL",
+                "model": model_key,
             })
-
         except Exception:
             continue
 
     return results
 
 
-def _normalize_deepfake_prob(scores: dict) -> float:
-    """
-    Normalize model output to a 0-1 deepfake probability
-    regardless of how the model labels its classes.
-    """
-    fake_keys = ["fake", "deepfake", "artificial", "manipulated", "synthetic", "1"]
-    real_keys = ["real", "authentic", "original", "genuine", "0"]
-
+def _normalize_prob(scores: dict) -> float:
+    fake_keys = ["fake", "deepfake", "artificial", "manipulated", "synthetic"]
     for key in fake_keys:
         for label, prob in scores.items():
             if key in label.lower():
-                return prob
-
-    # Fallback: assume binary, first class = real
+                return float(prob)
+    # umm-maybe convention: index 0 = artificial
     values = list(scores.values())
-    return values[1] if len(values) >= 2 else 0.0
+    return float(values[0]) if values else 0.0
