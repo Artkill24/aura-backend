@@ -40,7 +40,10 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 MAX_FILE_SIZE_MB = 100
-ALLOWED_TYPES = {"video/mp4", "video/quicktime", "video/x-msvideo", "video/webm"}
+ALLOWED_TYPES = {
+    "video/mp4", "video/quicktime", "video/x-msvideo", "video/webm",
+    "application/octet-stream",  # curl fallback — validated by ffprobe downstream
+}
 
 
 # ─────────────────────────────────────────────

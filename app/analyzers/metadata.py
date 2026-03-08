@@ -100,11 +100,13 @@ def analyze_metadata(video_path: str) -> dict:
                 pass
 
         # ── 3. Frame Rate Anomalies ──
+        STANDARD_FPS = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60]
         video_streams = [s for s in streams if s.get("codec_type") == "video"]
         for stream in video_streams:
             fps_raw = stream.get("r_frame_rate", "0/1")
             fps = _parse_fraction(fps_raw)
-            if fps and fps not in [24, 25, 30, 60, 23.976, 29.97, 59.94]:
+            # Use tolerance comparison — 30000/1001 = 29.97, avoid false positives
+            if fps and not any(abs(fps - std) < 0.1 for std in STANDARD_FPS):
                 flags.append({
                     "type": "UNUSUAL_FRAME_RATE",
                     "detail": f"Non-standard frame rate: {fps:.3f} fps",
@@ -132,10 +134,10 @@ def analyze_metadata(video_path: str) -> dict:
         if not has_device:
             flags.append({
                 "type": "NO_DEVICE_SIGNATURE",
-                "detail": "No camera/device model found in metadata — could indicate synthetic origin",
-                "severity": "LOW",
+                "detail": "No camera/device model found in metadata — stripped by messaging apps (WhatsApp/Telegram) or synthetic origin",
+                "severity": "INFO",
             })
-            score_factors.append(0.1)
+            score_factors.append(0.03)  # Very low — WhatsApp/Telegram strip this by design
 
         # ── 6. Duration vs Bitrate Sanity Check ──
         duration = float(format_info.get("duration", 0))
@@ -204,4 +206,3 @@ def _parse_fraction(frac_str: str) -> float | None:
         return float(frac_str)
     except Exception:
         return None
-

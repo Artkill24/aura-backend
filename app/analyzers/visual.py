@@ -20,11 +20,11 @@ def _load_model():
     """Lazy-load the deepfake detection model."""
     global _model, _processor
     if _model is None:
-        from transformers import AutoFeatureExtractor, AutoModelForImageClassification
+        from transformers import AutoImageProcessor, AutoModelForImageClassification
         import torch
 
         MODEL_ID = os.getenv("VISUAL_MODEL_ID", "dima806/deepfake_vs_real_image_detection")
-        _processor = AutoFeatureExtractor.from_pretrained(MODEL_ID)
+        _processor = AutoImageProcessor.from_pretrained(MODEL_ID)
         _model = AutoModelForImageClassification.from_pretrained(MODEL_ID)
         _model.eval()
     return _model, _processor
