@@ -1,0 +1,26 @@
+# AURA Backend — Python Dependencies
+# Install: pip install -r requirements.txt
+
+# ── Core API ──
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9         # Required for FastAPI file uploads
+
+# ── Video / Audio Processing ──
+opencv-python-headless==4.9.0.80  # Frame extraction (headless = no GUI deps)
+numpy==1.26.4
+
+# ── Metadata Analysis ──
+# ffprobe comes with ffmpeg — install system-level: apt install ffmpeg
+
+# ── AI / Deepfake Detection ──
+transformers==4.41.0             # HuggingFace model loading
+torch==2.3.0                     # PyTorch inference (CPU-only for MVP)
+Pillow==10.3.0                   # Image processing for frames
+
+# ── PDF Report Generation ──
+reportlab==4.2.0
+
+# ── Utilities ──
+python-dotenv==1.0.1             # .env config loading
+httpx==0.27.0                    # Async HTTP (for future webhook callbacks)
