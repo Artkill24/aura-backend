@@ -57,6 +57,8 @@ def generate_pdf_report(
     signal: dict,
     verdict: dict,
     elapsed: float,
+    moire: dict = None,
+    prnu: dict = None,
 ):
     doc = SimpleDocTemplate(
         output_path,
