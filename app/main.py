@@ -92,6 +92,7 @@ async def analyze_video(
             output_path=str(report_path),
             job_id=job_id,
             filename=file.filename,
+            video_path=str(video_path),
             metadata=metadata_result,
             visual=visual_result,
             audio=audio_result,

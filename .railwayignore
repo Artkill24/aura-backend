@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+temp/
+outputs/
+*.mp4
+*.avi
+*.mov
+aura-frontend/
+*.Zone.Identifier
