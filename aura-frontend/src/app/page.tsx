@@ -155,9 +155,9 @@ export default function Home() {
               {file ? (
                 <div className="text-center">
                   <div className="font-mono text-xs text-muted mb-2 uppercase tracking-widest">File loaded</div>
-                  <div className="font-mono text-sm text-bright mb-1 truncate max-w-xs mx-auto">{file.name}</div>
+                  <div className="font-mono text-sm text-bright mb-1 truncate max-w-xs mx-auto">{file?.name}</div>
                   <div className="font-mono text-xs text-muted">
-                    {(file.size / 1024 / 1024).toFixed(1)} MB — {file.type}
+                    {(file!.size / 1024 / 1024).toFixed(1)} MB — {file.type}
                   </div>
                 </div>
               ) : (
@@ -256,11 +256,11 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-3 font-mono text-xs">
                 <div>
                   <div className="text-muted mb-1">FILE</div>
-                  <div className="text-text truncate">{file.name}</div>
+                  <div className="text-text truncate">{file?.name}</div>
                 </div>
                 <div>
                   <div className="text-muted mb-1">SIZE</div>
-                  <div className="text-text">{(file.size / 1024 / 1024).toFixed(1)} MB</div>
+                  <div className="text-text">{(file!.size / 1024 / 1024).toFixed(1)} MB</div>
                 </div>
               </div>
 
