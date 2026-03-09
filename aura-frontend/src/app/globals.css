@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+
+:root {
+  --bg: #080b0f;
+  --surface: #0e1318;
+  --border: #1e2830;
+  --muted: #3a4a56;
+  --text: #c8d4dc;
+  --bright: #e8f0f5;
+  --green: #00e87a;
+  --amber: #ffb700;
+  --orange: #ff7322;
+  --red: #ff2d4e;
+  --blue: #00b4ff;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+}
+
+/* Scan-line overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,180,255,0.015) 2px,
+    rgba(0,180,255,0.015) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.font-mono { font-family: 'IBM Plex Mono', monospace; }
+
+/* Glitch animation */
+@keyframes glitch {
+  0%, 100% { clip-path: inset(0 0 100% 0); }
+  10% { clip-path: inset(10% 0 60% 0); transform: translate(-2px); }
+  20% { clip-path: inset(40% 0 30% 0); transform: translate(2px); }
+  30% { clip-path: inset(70% 0 10% 0); transform: translate(-1px); }
+  40% { clip-path: inset(20% 0 50% 0); transform: translate(1px); }
+  50% { clip-path: inset(0 0 0 0); transform: translate(0); }
+}
+
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: var(--blue); box-shadow: 0 0 0 0 rgba(0,180,255,0.3); }
+  50% { border-color: var(--blue); box-shadow: 0 0 0 8px rgba(0,180,255,0); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.blink { animation: blink 1s step-end infinite; }
+.pulse-border { animation: pulse-border 2s ease-in-out infinite; }
+
+/* Score bar */
+@keyframes fill-bar {
+  from { width: 0; }
+}
+
+.score-bar { animation: fill-bar 1s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+/* Grid noise texture */
+.noise-bg {
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(0,180,255,0.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0,232,122,0.02) 0%, transparent 40%),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+}
