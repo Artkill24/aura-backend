@@ -4,7 +4,9 @@ Produces a forensic-grade report that a lawyer or insurance expert can print and
 Built with ReportLab Platypus for structured, multi-page output.
 """
 
-from datetime import datetime
+import hashlib
+import os
+from datetime import datetime, timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm, cm
@@ -17,6 +19,36 @@ from reportlab.platypus import (
 from reportlab.graphics.shapes import Drawing, Rect, String
 from reportlab.graphics import renderPDF
 
+
+
+# ─────────────────────────────────────────────
+#  Chain of Custody
+# ─────────────────────────────────────────────
+AURA_ENGINE_VERSION = "0.5.0"
+AURA_MODELS = {
+    "visual_a": "dima806/deepfake_vs_real_image_detection",
+    "visual_b": "umm-maybe/AI-image-detector",
+    "signal":   "AURA-SignalPhysics-v5 (calibrated)",
+    "prnu":     "AURA-PRNU-v1 (sensor fingerprint)",
+    "moire":    "AURA-Moire-v1 (LCD pixel grid)",
+}
+
+def _compute_file_hash(file_path: str) -> dict:
+    """Calcola SHA256 e MD5 del file video originale."""
+    sha256 = hashlib.sha256()
+    md5    = hashlib.md5()
+    try:
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(65536), b''):
+                sha256.update(chunk)
+                md5.update(chunk)
+        return {
+            "sha256": sha256.hexdigest(),
+            "md5":    md5.hexdigest(),
+            "size_bytes": os.path.getsize(file_path),
+        }
+    except Exception:
+        return {"sha256": "N/A", "md5": "N/A", "size_bytes": 0}
 
 # ─────────────────────────────────────────────
 #  Brand Colors
@@ -59,7 +91,12 @@ def generate_pdf_report(
     elapsed: float,
     moire: dict = None,
     prnu: dict = None,
+    video_path: str = None,
 ):
+    # Chain of custody
+    analysis_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    file_hash = _compute_file_hash(video_path) if video_path else {"sha256": "N/A", "md5": "N/A", "size_bytes": 0}
+
     doc = SimpleDocTemplate(
         output_path,
         pagesize=A4,
@@ -126,6 +163,64 @@ def generate_pdf_report(
     story += _build_disclaimer(styles)
 
     # ── Footer handled via onPage ──
+    # ── Chain of Custody ──────────────────────────────────────────────────────
+    story.append(Spacer(1, 8 * mm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=AURA_CYAN))
+    story.append(Spacer(1, 4 * mm))
+
+    custody_title_style = ParagraphStyle(
+        "CustodyTitle", parent=styles["Normal"],
+        fontName="Courier-Bold", fontSize=8,
+        textColor=AURA_CYAN, spaceAfter=4, letterSpacing=2,
+    )
+    custody_val_style = ParagraphStyle(
+        "CustodyVal", parent=styles["Normal"],
+        fontName="Courier", fontSize=7,
+        textColor=colors.HexColor("#888888"), spaceAfter=2,
+    )
+    story.append(Paragraph("CHAIN OF CUSTODY  /  CERTIFICATE OF ANALYSIS", custody_title_style))
+    story.append(Spacer(1, 2 * mm))
+
+    custody_data = [
+        ["Job ID",          job_id],
+        ["Timestamp (UTC)", analysis_timestamp],
+        ["File",            filename],
+        ["SHA-256",         file_hash["sha256"]],
+        ["MD5",             file_hash["md5"]],
+        ["Size",            f"{file_hash['size_bytes']:,} bytes"],
+        ["Engine",          f"AURA Reality Firewall v{AURA_ENGINE_VERSION}"],
+        ["Visual Model A",  AURA_MODELS["visual_a"]],
+        ["Visual Model B",  AURA_MODELS["visual_b"]],
+        ["Signal Layer",    AURA_MODELS["signal"]],
+        ["PRNU Layer",      AURA_MODELS["prnu"]],
+        ["Moire Layer",     AURA_MODELS["moire"]],
+    ]
+    custody_table = Table(custody_data, colWidths=[38 * mm, 138 * mm], hAlign="LEFT")
+    custody_table.setStyle(TableStyle([
+        ("FONTNAME",    (0, 0), (0, -1), "Courier-Bold"),
+        ("FONTNAME",    (1, 0), (1, -1), "Courier"),
+        ("FONTSIZE",    (0, 0), (-1, -1), 7),
+        ("TEXTCOLOR",   (0, 0), (0, -1), AURA_CYAN),
+        ("TEXTCOLOR",   (1, 0), (1, -1), colors.HexColor("#AAAAAA")),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#0A0A14"), colors.HexColor("#0D0D1A")]),
+        ("TOPPADDING",  (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW",   (0, -1), (-1, -1), 0.3, AURA_CYAN),
+    ]))
+    story.append(custody_table)
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph(
+        "This report was generated automatically by AURA Reality Firewall. "
+        "The SHA-256 hash uniquely identifies the analyzed file. "
+        "Any modification to the original file will produce a different hash, "
+        "invalidating this certificate. Results should be reviewed by a qualified "
+        "forensic expert before use in legal proceedings.",
+        ParagraphStyle("Disc", parent=styles["Normal"], fontName="Courier",
+                       fontSize=6, textColor=colors.HexColor("#555555"), leading=8)
+    ))
+
     doc.build(
         story,
         onFirstPage=_add_footer,
