@@ -39,7 +39,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 MAX_FILE_SIZE_MB = 500
 ALLOWED_TYPES = {
-    "video/mp4", "video/quicktime", "video/x-msvideo", "video/avi", "video/msvideo", "video/x-matroska", "video/mkv", "video/webm",
+    "video/mp4", "video/quicktime", "video/x-msvideo", "video/avi", "video/msvideo", "video/x-matroska", "video/mkv", "video/avi", "video/msvideo", "video/x-matroska", "video/mkv", "video/webm",
     "application/octet-stream",
 }
 
