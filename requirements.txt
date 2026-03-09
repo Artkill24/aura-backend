@@ -15,7 +15,6 @@ numpy==1.26.4
 
 # ── AI / Deepfake Detection ──
 transformers==4.41.0             # HuggingFace model loading
-torch==2.3.0                     # PyTorch inference (CPU-only for MVP)
 Pillow==10.3.0                   # Image processing for frames
 
 # ── PDF Report Generation ──
