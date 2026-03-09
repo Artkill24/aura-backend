@@ -31,7 +31,7 @@ export default function Home() {
     const pr_int = setInterval(() => setProgress(p => p < 88 ? p + Math.random()*3 : p), 500);
     try {
       const fd = new FormData(); fd.append("file", file);
-      const res = await fetch("/api/backend/analyze", { method: "POST", body: fd });
+      const res = await fetch("/api/backend/analyze", { method: "POST", body: fd, signal: AbortSignal.timeout(300000) });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       clearInterval(mi_int); clearInterval(pr_int);
