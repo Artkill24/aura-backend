@@ -131,7 +131,7 @@ async def analyze_url(payload: dict):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
     job_id = str(uuid.uuid4())
-    video_path = TEMP_DIR / f"{job_id}_dl.mp4"
+    video_path = UPLOAD_DIR / f"{job_id}_dl.mp4"
     try:
         result = subprocess.run(
             ["yt-dlp", "--no-playlist", "--max-filesize", "200m",
@@ -156,7 +156,7 @@ async def analyze_url(payload: dict):
         prnu_result     = analyze_prnu(str(video_path))
         verdict = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result)
         elapsed = round(time.time() - start, 2)
-        report_path = REPORTS_DIR / f"{job_id}.pdf"
+        report_path = OUTPUT_DIR / f"{job_id}.pdf"
         generate_pdf_report(
             output_path=str(report_path), job_id=job_id, filename=filename,
             metadata=metadata_result, visual=visual_result, audio=audio_result,
