@@ -6,7 +6,6 @@ Core Analysis Engine v0.3
 import os
 import uuid
 import time
-import subprocess
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -125,55 +124,6 @@ async def analyze_video(
 
 
 
-@app.post("/analyze-url")
-async def analyze_url(payload: dict):
-    url = payload.get("url", "").strip()
-    if not url:
-        raise HTTPException(status_code=400, detail="URL is required")
-    job_id = str(uuid.uuid4())
-    video_path = UPLOAD_DIR / f"{job_id}_dl.mp4"
-    try:
-        result = subprocess.run(
-            ["yt-dlp", "--no-playlist", "--max-filesize", "200m",
-             "-f", "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best",
-             "--merge-output-format", "mp4", "-o", str(video_path), url],
-            capture_output=True, text=True, timeout=180
-        )
-        if result.returncode != 0:
-            raise HTTPException(status_code=422, detail=f"Download failed: {result.stderr[:300]}")
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=408, detail="Download timeout")
-    if not video_path.exists():
-        raise HTTPException(status_code=422, detail="Download failed")
-    filename = video_path.name
-    try:
-        start = time.time()
-        metadata_result = analyze_metadata(str(video_path))
-        visual_result   = analyze_frames(str(video_path))
-        audio_result    = analyze_audio_sync(str(video_path))
-        signal_result   = analyze_signal_physics(str(video_path))
-        moire_result    = analyze_moire(str(video_path))
-        prnu_result     = analyze_prnu(str(video_path))
-        verdict = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result)
-        elapsed = round(time.time() - start, 2)
-        report_path = OUTPUT_DIR / f"{job_id}.pdf"
-        generate_pdf_report(
-            output_path=str(report_path), job_id=job_id, filename=filename,
-            metadata=metadata_result, visual=visual_result, audio=audio_result,
-            signal=signal_result, verdict=verdict, elapsed=elapsed,
-            moire=moire_result, prnu=prnu_result, video_path=str(video_path),
-        )
-    finally:
-        if video_path.exists():
-            video_path.unlink()
-    return {
-        "job_id": job_id, "filename": filename, "source_url": url,
-        "verdict": verdict, "metadata": metadata_result, "visual": visual_result,
-        "audio": audio_result, "signal": signal_result, "moire": moire_result,
-        "prnu": prnu_result, "elapsed": elapsed, "report_url": f"/report/{job_id}",
-        "screen_recording_score": moire_result.get("screen_recording_score", 0),
-        "prnu_score": prnu_result.get("prnu_score", 0),
-    }
 
 @app.get("/report/{job_id}")
 def get_report(job_id: str):
