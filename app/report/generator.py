@@ -91,6 +91,7 @@ def generate_pdf_report(
     elapsed: float,
     moire: dict = None,
     prnu: dict = None,
+    vcam: dict = None,
     video_path: str = None,
 ):
     # Chain of custody
