@@ -18,6 +18,7 @@ from app.analyzers.signal import analyze_signal_physics
 from app.analyzers.moire import analyze_moire
 from app.analyzers.prnu import analyze_prnu
 from app.analyzers.virtual_cam import analyze_virtual_cam
+from app.analyzers.heatmap import generate_forensic_heatmaps
 from app.report.generator import generate_pdf_report
 
 app = FastAPI(
@@ -65,6 +66,7 @@ async def analyze_video(
     ext = Path(file.filename).suffix or ".mp4"
     video_path = UPLOAD_DIR / f"{job_id}{ext}"
     report_path = OUTPUT_DIR / f"AURA_Report_{job_id}.pdf"
+    heatmaps = {}
 
     # Streaming write — non carica tutto in RAM
     size = 0
@@ -86,6 +88,7 @@ async def analyze_video(
         moire_result    = analyze_moire(str(video_path))
         prnu_result     = analyze_prnu(str(video_path))
         vcam_result     = analyze_virtual_cam(str(video_path))
+        heatmaps        = generate_forensic_heatmaps(str(video_path), str(OUTPUT_DIR), job_id)
         elapsed         = round(time.time() - start, 2)
 
         verdict = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result)
@@ -102,6 +105,7 @@ async def analyze_video(
             moire=moire_result,
             prnu=prnu_result,
             vcam=vcam_result,
+            heatmaps=heatmaps,
             verdict=verdict,
             elapsed=elapsed,
         )

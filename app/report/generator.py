@@ -92,6 +92,7 @@ def generate_pdf_report(
     moire: dict = None,
     prnu: dict = None,
     vcam: dict = None,
+    heatmaps: dict = None,
     video_path: str = None,
 ):
     # Chain of custody
@@ -159,6 +160,41 @@ def generate_pdf_report(
         extra_table=_metadata_details_table(signal.get("details", {}), styles),
     )
     story.append(Spacer(1, 8 * mm))
+
+    # ── Forensic Heatmaps ─────────────────────────────────────────────────────
+    if heatmaps and (heatmaps.get("ela") or heatmaps.get("signal")):
+        story.append(Spacer(1, 8 * mm))
+        story.append(Paragraph("5. Forensic Visual Analysis", styles["SectionTitle"]))
+        story.append(Spacer(1, 4 * mm))
+        from reportlab.platypus import Image as RLImage
+        heatmap_rows = []
+        if heatmaps.get("ela") and os.path.exists(heatmaps["ela"]):
+            heatmap_rows.append([
+                Paragraph("ELA — Error Level Analysis", ParagraphStyle("HM", parent=styles["Normal"], fontName="Courier-Bold", fontSize=8, textColor=AURA_CYAN)),
+                Paragraph("Signal Physics — Block Uniformity Map", ParagraphStyle("HM2", parent=styles["Normal"], fontName="Courier-Bold", fontSize=8, textColor=AURA_CYAN)),
+            ])
+            ela_img = RLImage(heatmaps["ela"], width=85*mm, height=48*mm)
+            if heatmaps.get("signal") and os.path.exists(heatmaps["signal"]):
+                sig_img = RLImage(heatmaps["signal"], width=85*mm, height=48*mm)
+                heatmap_rows.append([ela_img, sig_img])
+            else:
+                heatmap_rows.append([ela_img, Paragraph("N/A", styles["TableCell"])])
+            ht = Table(heatmap_rows, colWidths=[90*mm, 90*mm])
+            ht.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (-1,0), AURA_DARK),
+                ("GRID", (0,0), (-1,-1), 0.3, AURA_BORDER),
+                ("TOPPADDING", (0,0), (-1,-1), 4),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+                ("LEFTPADDING", (0,0), (-1,-1), 4),
+                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ]))
+            story.append(ht)
+            story.append(Spacer(1, 3*mm))
+            story.append(Paragraph(
+                "ELA highlights regions with inconsistent JPEG compression — manipulated areas show higher error levels (red/yellow). "
+                "The Signal map shows block uniformity anomalies — artificially uniform blocks (bright) indicate synthetic generation.",
+                ParagraphStyle("HMDesc", parent=styles["Normal"], fontName="Courier", fontSize=7, textColor=AURA_GRAY, leading=9)
+            ))
 
     # ── Legal Disclaimer ──
     story += _build_disclaimer(styles)
