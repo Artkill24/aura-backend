@@ -93,6 +93,7 @@ def generate_pdf_report(
     prnu: dict = None,
     vcam: dict = None,
     heatmaps: dict = None,
+    rppg: dict = None,
     video_path: str = None,
 ):
     # Chain of custody

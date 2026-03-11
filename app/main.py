@@ -19,6 +19,7 @@ from app.analyzers.moire import analyze_moire
 from app.analyzers.prnu import analyze_prnu
 from app.analyzers.virtual_cam import analyze_virtual_cam
 from app.analyzers.heatmap import generate_forensic_heatmaps
+from app.analyzers.rppg import analyze_rppg
 from app.report.generator import generate_pdf_report
 
 app = FastAPI(
@@ -88,10 +89,11 @@ async def analyze_video(
         moire_result    = analyze_moire(str(video_path))
         prnu_result     = analyze_prnu(str(video_path))
         vcam_result     = analyze_virtual_cam(str(video_path))
+        rppg_result     = analyze_rppg(str(video_path))
         heatmaps        = generate_forensic_heatmaps(str(video_path), str(OUTPUT_DIR), job_id)
         elapsed         = round(time.time() - start, 2)
 
-        verdict = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result)
+        verdict = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result)
 
         generate_pdf_report(
             output_path=str(report_path),
@@ -106,6 +108,7 @@ async def analyze_video(
             prnu=prnu_result,
             vcam=vcam_result,
             heatmaps=heatmaps,
+            rppg=rppg_result,
             verdict=verdict,
             elapsed=elapsed,
         )
@@ -127,6 +130,9 @@ async def analyze_video(
         "screen_recording_score": moire_result.get("screen_recording_score", 0),
         "prnu_score": prnu_result.get("prnu_score", 0),
         "virtual_cam_score": vcam_result.get("virtual_cam_score", 0),
+            "rppg_score": rppg_result.get("rppg_score", 0),
+            "rppg_bpm": rppg_result.get("bpm_detected"),
+            "rppg_quality": rppg_result.get("signal_quality"),
         "report_url": f"/report/{job_id}",
     })
 
@@ -145,7 +151,7 @@ def get_report(job_id: str):
     )
 
 
-def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moire: dict, prnu: dict = None, vcam: dict = None) -> dict:
+def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moire: dict, prnu: dict = None, vcam: dict = None, rppg: dict = None) -> dict:
     """
     Pesi v0.5 — Tiered verdicts con confidence bands.
 
@@ -157,7 +163,7 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
     prnu     : 0.22  (sensor fingerprint)
     vcam     : 0.20  (virtual camera)
     """
-    weights = {"metadata": 0.10, "visual": 0.10, "audio": 0.10, "signal": 0.28, "moire": 0.10, "prnu": 0.17, "vcam": 0.15}
+    weights = {"metadata": 0.08, "visual": 0.08, "audio": 0.08, "signal": 0.25, "moire": 0.08, "prnu": 0.15, "vcam": 0.13, "rppg": 0.15}
 
     meta_score   = metadata.get("manipulation_score", 0.0)
     visual_score = visual.get("deepfake_probability", 0.0)
@@ -166,6 +172,7 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
     moire_score  = moire.get("screen_recording_score", 0.0)
     prnu_score   = prnu.get("prnu_score", 0.0) if prnu else 0.0
     vcam_score   = vcam.get("virtual_cam_score", 0.0) if vcam else 0.0
+    rppg_score   = rppg.get("rppg_score", 0.0) if rppg else 0.0
 
     # Shield: azzera signal solo se è vera screen recording (non AI)
     is_screen_recording = moire_score >= 0.5 and prnu_score < 0.4
@@ -179,7 +186,8 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
         signal_score * weights["signal"] +
         moire_score  * weights["moire"] +
         prnu_score   * weights["prnu"] +
-        vcam_score   * weights["vcam"]
+        vcam_score   * weights["vcam"] +
+        rppg_score   * weights["rppg"]
     )
     composite = round(composite, 3)
 
@@ -191,6 +199,7 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
         signal_score > 0.50,
         prnu_score   > 0.50,
         vcam_score   > 0.50,
+        rppg_score   > 0.60,
     ])
 
     # Confidence: quanti layer concordano
@@ -261,6 +270,7 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
             "moire_contribution":     round(moire_score  * weights["moire"], 3),
             "prnu_contribution":      round(prnu_score   * weights["prnu"], 3),
             "vcam_contribution":      round(vcam_score   * weights["vcam"], 3),
+            "rppg_contribution":      round(rppg_score   * weights["rppg"], 3),
         },
     }
 
