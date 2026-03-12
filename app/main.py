@@ -19,6 +19,7 @@ from app.analyzers.moire import analyze_moire
 from app.analyzers.prnu import analyze_prnu
 from app.analyzers.virtual_cam import analyze_virtual_cam
 from app.analyzers.heatmap import generate_forensic_heatmaps
+from app.analyzers.forensic_inference import get_forensic_conclusion
 from app.analyzers.rppg import analyze_rppg
 from app.report.generator import generate_pdf_report
 
@@ -90,10 +91,11 @@ async def analyze_video(
         prnu_result     = analyze_prnu(str(video_path))
         vcam_result     = analyze_virtual_cam(str(video_path))
         rppg_result     = analyze_rppg(str(video_path))
-        heatmaps        = generate_forensic_heatmaps(str(video_path), str(OUTPUT_DIR), job_id)
+        verdict = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result)
+        forensic        = get_forensic_conclusion(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, verdict)
         elapsed         = round(time.time() - start, 2)
 
-        verdict = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result)
+        heatmaps        = generate_forensic_heatmaps(str(video_path), str(OUTPUT_DIR), job_id)
 
         generate_pdf_report(
             output_path=str(report_path),
@@ -109,6 +111,7 @@ async def analyze_video(
             vcam=vcam_result,
             heatmaps=heatmaps,
             rppg=rppg_result,
+            forensic=forensic,
             verdict=verdict,
             elapsed=elapsed,
         )
@@ -133,6 +136,7 @@ async def analyze_video(
             "rppg_score": rppg_result.get("rppg_score", 0),
             "rppg_bpm": rppg_result.get("bpm_detected"),
             "rppg_quality": rppg_result.get("signal_quality"),
+            "forensic_conclusion": forensic,
         "report_url": f"/report/{job_id}",
     })
 

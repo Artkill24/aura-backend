@@ -9,6 +9,7 @@ import os
 from datetime import datetime, timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
+from reportlab.lib.colors import HexColor
 from reportlab.lib.units import mm, cm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
@@ -94,6 +95,7 @@ def generate_pdf_report(
     vcam: dict = None,
     heatmaps: dict = None,
     rppg: dict = None,
+    forensic: dict = None,
     video_path: str = None,
 ):
     # Chain of custody
@@ -197,6 +199,26 @@ def generate_pdf_report(
                 ParagraphStyle("HMDesc", parent=styles["Normal"], fontName="Courier", fontSize=7, textColor=AURA_GRAY, leading=9)
             ))
 
+    # ── Forensic Conclusion ──────────────────────────────────────────────────
+    if forensic:
+        story.append(Spacer(1, 8 * mm))
+        story.append(Paragraph("6. Conclusione Forense", styles["SectionTitle"]))
+        story.append(Spacer(1, 4 * mm))
+        av = forensic.get("attack_vector", "UNKNOWN")
+        av_style = ParagraphStyle("AVBadge", parent=styles["Normal"], fontName="Courier-Bold", fontSize=10, textColor=HexColor("#ffffff"), backColor=HexColor("#ff4444"), borderPadding=(4,8,4,8), leading=16)
+        story.append(Paragraph(f"VETTORE: {av.replace(chr(95), chr(32))}", av_style))
+        story.append(Spacer(1, 4 * mm))
+        for conclusion in forensic.get("conclusions", []):
+            story.append(Paragraph(conclusion, ParagraphStyle("FT", parent=styles["Normal"], fontName="Courier", fontSize=8, textColor=HexColor("#e0e0e0"), leading=12, backColor=HexColor("#1a1a2e"), borderPadding=(6,6,6,6))))
+            story.append(Spacer(1, 3 * mm))
+        rppg_s = forensic.get("rppg_summary")
+        if rppg_s:
+            story.append(Paragraph(f"rPPG: {rppg_s}", ParagraphStyle("RPT", parent=styles["Normal"], fontName="Courier-Oblique", fontSize=8, textColor=HexColor("#ff6b6b"), leading=11)))
+            story.append(Spacer(1, 3 * mm))
+        story.append(Paragraph("Raccomandazioni:", ParagraphStyle("RecT", parent=styles["Normal"], fontName="Courier-Bold", fontSize=9, textColor=AURA_CYAN)))
+        for i, rec in enumerate(forensic.get("recommendations", []), 1):
+            story.append(Paragraph(f"{i}. {rec}", ParagraphStyle("Rec", parent=styles["Normal"], fontName="Courier", fontSize=8, textColor=HexColor("#cccccc"), leading=11, leftIndent=8)))
+            story.append(Spacer(1, 1 * mm))
     # ── Legal Disclaimer ──
     story += _build_disclaimer(styles)
 
