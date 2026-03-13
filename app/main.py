@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 """
 AURA — Advanced Universal Reality Authentication
 Core Analysis Engine v0.3
@@ -20,6 +21,7 @@ from app.analyzers.prnu import analyze_prnu
 from app.analyzers.virtual_cam import analyze_virtual_cam
 from app.analyzers.heatmap import generate_forensic_heatmaps
 from app.analyzers.forensic_inference import get_forensic_conclusion
+from app.utils.qr_verify import save_qr_png
 from app.analyzers.rppg import analyze_rppg
 from app.report.generator import generate_pdf_report
 
@@ -83,6 +85,8 @@ async def analyze_video(
 
     start = time.time()
     try:
+        import hashlib as _hl
+        file_sha256 = _hl.sha256(open(video_path,"rb").read()).hexdigest()
         metadata_result = analyze_metadata(str(video_path))
         visual_result   = await analyze_frames(str(video_path))
         audio_result    = analyze_audio_sync(str(video_path))
@@ -95,6 +99,19 @@ async def analyze_video(
         forensic        = get_forensic_conclusion(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, verdict)
         elapsed         = round(time.time() - start, 2)
 
+        # Salva metadata per endpoint /verify
+        import json as _json
+        _meta = {
+            "verdict_label": verdict.get("label"),
+            "composite_score": verdict.get("composite_score"),
+            "filename": file.filename,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        with open(OUTPUT_DIR / f"{job_id}_meta.json", "w") as _mf:
+            _json.dump(_meta, _mf)
+
+        # Genera QR code di verifica
+        qr_path, verify_url = save_qr_png(job_id, file_sha256, str(OUTPUT_DIR))
         heatmaps        = generate_forensic_heatmaps(str(video_path), str(OUTPUT_DIR), job_id)
 
         generate_pdf_report(
@@ -112,6 +129,8 @@ async def analyze_video(
             heatmaps=heatmaps,
             rppg=rppg_result,
             forensic=forensic,
+            qr_path=qr_path,
+            verify_url=verify_url,
             verdict=verdict,
             elapsed=elapsed,
         )
@@ -137,6 +156,7 @@ async def analyze_video(
             "rppg_bpm": rppg_result.get("bpm_detected"),
             "rppg_quality": rppg_result.get("signal_quality"),
             "forensic_conclusion": forensic,
+            "verify_url": verify_url,
         "report_url": f"/report/{job_id}",
     })
 
@@ -153,6 +173,47 @@ def get_report(job_id: str):
         media_type="application/pdf",
         filename=f"AURA_Report_{job_id}.pdf",
     )
+
+
+@app.get("/verify/{job_id}")
+async def verify_report(job_id: str, h: str = ""):
+    """Endpoint di verifica pubblica — scansionato dal QR nel PDF."""
+    report_path = OUTPUT_DIR / f"AURA_Report_{job_id}.pdf"
+    
+    if not report_path.exists():
+        return {
+            "status": "NOT_FOUND",
+            "job_id": job_id,
+            "message": "Report non trovato o scaduto.",
+        }
+    
+    # Ricalcola hash del PDF
+    import hashlib
+    with open(report_path, "rb") as f:
+        pdf_hash = hashlib.sha256(f.read()).hexdigest()
+    
+    # Cerca metadata dal job (se salvato)
+    meta_path = OUTPUT_DIR / f"{job_id}_meta.json"
+    meta = {}
+    if meta_path.exists():
+        import json
+        with open(meta_path) as f:
+            meta = json.load(f)
+    
+    hash_match = pdf_hash[:16] == h if h else None
+    
+    return {
+        "status": "VERIFIED" if hash_match else "UNVERIFIED",
+        "job_id": job_id,
+        "pdf_sha256_prefix": pdf_hash[:16],
+        "hash_match": hash_match,
+        "verdict": meta.get("verdict_label", "N/A"),
+        "composite_score": meta.get("composite_score", "N/A"),
+        "filename": meta.get("filename", "N/A"),
+        "analysis_timestamp": meta.get("timestamp", "N/A"),
+        "engine": "AURA Reality Firewall v0.7.0",
+        "message": "✅ Report autentico — hash verificato." if hash_match else "⚠️ Hash non corrispondente — report potrebbe essere stato modificato.",
+    }
 
 
 def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moire: dict, prnu: dict = None, vcam: dict = None, rppg: dict = None) -> dict:

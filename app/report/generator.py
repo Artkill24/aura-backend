@@ -96,6 +96,8 @@ def generate_pdf_report(
     heatmaps: dict = None,
     rppg: dict = None,
     forensic: dict = None,
+    qr_path: str = None,
+    verify_url: str = None,
     video_path: str = None,
 ):
     # Chain of custody
@@ -219,6 +221,33 @@ def generate_pdf_report(
         for i, rec in enumerate(forensic.get("recommendations", []), 1):
             story.append(Paragraph(f"{i}. {rec}", ParagraphStyle("Rec", parent=styles["Normal"], fontName="Courier", fontSize=8, textColor=HexColor("#cccccc"), leading=11, leftIndent=8)))
             story.append(Spacer(1, 1 * mm))
+    # ── QR Verification ──────────────────────────────────────────────────────
+    if qr_path and os.path.exists(qr_path) and verify_url:
+        from reportlab.platypus import Image as RLImage
+        qr_table = Table([
+            [
+                RLImage(qr_path, width=28*mm, height=28*mm),
+                Paragraph(
+                    f"<b>Scan to Verify</b><br/>"
+                    f"This QR links to the live verification endpoint.<br/>"
+                    f"URL: {verify_url}<br/>"
+                    f"If the report has been tampered with, the hash will not match.",
+                    ParagraphStyle("QRText", parent=styles["Normal"], fontName="Courier", fontSize=7,
+                        textColor=HexColor("#cccccc"), leading=10)
+                )
+            ]
+        ], colWidths=[32*mm, 148*mm])
+        qr_table.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), HexColor("#0D0D1A")),
+            ("GRID", (0,0), (-1,-1), 0.3, AURA_BORDER),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING", (0,0), (-1,-1), 6),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+            ("LEFTPADDING", (0,0), (-1,-1), 6),
+        ]))
+        story.append(Spacer(1, 4*mm))
+        story.append(qr_table)
+
     # ── Legal Disclaimer ──
     story += _build_disclaimer(styles)
 
