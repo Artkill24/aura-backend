@@ -25,3 +25,5 @@ python-dotenv==1.0.1             # .env config loading
 httpx==0.27.0                    # Async HTTP (for future webhook callbacks)
 scipy
 mediapipe
+qrcode[pil]
+groq
