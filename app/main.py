@@ -21,6 +21,7 @@ from app.analyzers.prnu import analyze_prnu
 from app.analyzers.virtual_cam import analyze_virtual_cam
 from app.analyzers.heatmap import generate_forensic_heatmaps
 from app.analyzers.forensic_inference import get_forensic_conclusion
+from app.analyzers.ai_narrative import generate_forensic_narrative
 from app.utils.qr_verify import save_qr_png
 from app.analyzers.rppg import analyze_rppg
 from app.report.generator import generate_pdf_report
@@ -112,6 +113,7 @@ async def analyze_video(
 
         # Genera QR code di verifica
         qr_path, verify_url = save_qr_png(job_id, file_sha256, str(OUTPUT_DIR))
+        ai_narrative    = generate_forensic_narrative(verdict, metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, forensic)
         heatmaps        = generate_forensic_heatmaps(str(video_path), str(OUTPUT_DIR), job_id)
 
         generate_pdf_report(
@@ -130,6 +132,7 @@ async def analyze_video(
             rppg=rppg_result,
             forensic=forensic,
             qr_path=qr_path,
+            ai_narrative=ai_narrative.get("narrative"),
             verify_url=verify_url,
             verdict=verdict,
             elapsed=elapsed,
@@ -157,6 +160,8 @@ async def analyze_video(
             "rppg_quality": rppg_result.get("signal_quality"),
             "forensic_conclusion": forensic,
             "verify_url": verify_url,
+            "ai_narrative": ai_narrative.get("narrative"),
+            "ai_model": ai_narrative.get("model"),
         "report_url": f"/report/{job_id}",
     })
 
@@ -228,7 +233,7 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
     prnu     : 0.22  (sensor fingerprint)
     vcam     : 0.20  (virtual camera)
     """
-    weights = {"metadata": 0.08, "visual": 0.08, "audio": 0.08, "signal": 0.25, "moire": 0.08, "prnu": 0.15, "vcam": 0.13, "rppg": 0.15}
+    weights = {"metadata": 0.07, "visual": 0.05, "audio": 0.07, "signal": 0.25, "moire": 0.08, "prnu": 0.14, "vcam": 0.13, "rppg": 0.18}
 
     meta_score   = metadata.get("manipulation_score", 0.0)
     visual_score = visual.get("deepfake_probability", 0.0)
@@ -243,6 +248,7 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
     is_screen_recording = moire_score >= 0.5 and prnu_score < 0.4
     if is_screen_recording:
         signal_score = 0.0
+        visual_score = min(visual_score, 0.20)
 
     composite = (
         meta_score   * weights["metadata"] +

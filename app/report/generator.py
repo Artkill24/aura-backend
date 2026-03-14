@@ -98,6 +98,7 @@ def generate_pdf_report(
     forensic: dict = None,
     qr_path: str = None,
     verify_url: str = None,
+    ai_narrative: str = None,
     video_path: str = None,
 ):
     # Chain of custody
@@ -221,6 +222,23 @@ def generate_pdf_report(
         for i, rec in enumerate(forensic.get("recommendations", []), 1):
             story.append(Paragraph(f"{i}. {rec}", ParagraphStyle("Rec", parent=styles["Normal"], fontName="Courier", fontSize=8, textColor=HexColor("#cccccc"), leading=11, leftIndent=8)))
             story.append(Spacer(1, 1 * mm))
+    # ── AI Narrative ──────────────────────────────────────────────────────────
+    if ai_narrative:
+        story.append(Spacer(1, 5 * mm))
+        story.append(Paragraph("7. Analisi AI — Llama 3.3-70B (Groq)", styles["SectionTitle"]))
+        story.append(Spacer(1, 3 * mm))
+        story.append(Paragraph(ai_narrative, ParagraphStyle("AINarrative",
+            parent=styles["Normal"], fontName="Courier", fontSize=8,
+            textColor=HexColor("#e8e8e8"), leading=13,
+            backColor=HexColor("#0a0a1a"),
+            borderColor=AURA_CYAN, borderWidth=0.5,
+            borderPadding=(8,8,8,8))))
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(
+            "⚠ Questa narrativa è generata da un modello linguistico AI e deve essere verificata da un perito umano certificato.",
+            ParagraphStyle("AIDisclaimer", parent=styles["Normal"], fontName="Courier-Oblique",
+                fontSize=7, textColor=HexColor("#888888"), leading=9)))
+
     # ── QR Verification ──────────────────────────────────────────────────────
     if qr_path and os.path.exists(qr_path) and verify_url:
         from reportlab.platypus import Image as RLImage

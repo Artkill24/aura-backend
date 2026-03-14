@@ -201,11 +201,11 @@ const copy = {
 };
 
 export default function AuraLanding() {
-  const [lang, setLang] = useState("it");
+  const [lang, setLang] = useState<"it" | "en">("it");
   const [scrolled, setScrolled] = useState(false);
-  const [visibleSections, setVisibleSections] = useState(new Set());
+  const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
   const t = copy[lang];
-  const observerRef = useRef(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -217,12 +217,12 @@ export default function AuraLanding() {
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
-          if (e.isIntersecting) setVisibleSections((s) => new Set([...s, e.target.id]));
+          if (e.isIntersecting) setVisibleSections((s) => { const n = new Set(Array.from(s)); n.add(e.target.id); return n; });
         });
       },
       { threshold: 0.1 }
     );
-    document.querySelectorAll("[data-observe]").forEach((el) => observerRef.current.observe(el));
+    document.querySelectorAll("[data-observe]").forEach((el) => observerRef.current?.observe(el));
     return () => observerRef.current?.disconnect();
   }, [lang]);
 
@@ -273,11 +273,11 @@ export default function AuraLanding() {
             <a key={l} href="#" className="nav-link" style={{ fontSize: "12px", color: "#aaaacc", textDecoration: "none", letterSpacing: "0.08em" }}>{l}</a>
           ))}
           <div style={{ display: "flex", gap: "4px", background: "#ffffff0a", border: "1px solid #ffffff14", padding: "2px" }}>
-            {["it", "en"].map((l) => (
+            {(["it", "en"] as ("it" | "en")[]).map((l) => (
               <button key={l} className="lang-btn" onClick={() => setLang(l)} style={{ padding: "3px 10px", fontSize: "11px", background: lang === l ? CYAN : "transparent", color: lang === l ? "#050508" : "#666688", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: lang === l ? 700 : 400, letterSpacing: "0.05em" }}>{l.toUpperCase()}</button>
             ))}
           </div>
-          <a href="https://aura-frontend-nu-jade.vercel.app" className="btn-primary" style={{ padding: "8px 20px", background: CYAN, color: "#050508", border: "none", fontSize: "12px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>{t.nav.cta}</a>
+          <a href="/analyze" className="btn-primary" style={{ padding: "8px 20px", background: CYAN, color: "#050508", border: "none", fontSize: "12px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>{t.nav.cta}</a>
         </div>
       </nav>
 
@@ -302,7 +302,7 @@ export default function AuraLanding() {
         <p style={{ maxWidth: "600px", color: "#888899", fontSize: "15px", lineHeight: 1.7, marginBottom: "2.5rem", animation: "fadeUp 0.6s ease 0.3s both" }}>{t.hero.sub}</p>
 
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center", animation: "fadeUp 0.6s ease 0.4s both" }}>
-          <a href="https://aura-frontend-nu-jade.vercel.app" className="btn-primary" style={{ padding: "14px 32px", background: CYAN, color: "#050508", border: "none", fontSize: "13px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>{t.hero.cta1}</a>
+          <a href="/analyze" className="btn-primary" style={{ padding: "14px 32px", background: CYAN, color: "#050508", border: "none", fontSize: "13px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>{t.hero.cta1}</a>
           <a href="mailto:kaicarsaad455@gmail.com" className="btn-outline" style={{ padding: "14px 32px", background: "transparent", color: "#ccccdd", border: "1px solid #ffffff22", fontSize: "13px", fontFamily: "inherit", cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>{t.hero.cta2}</a>
         </div>
 
@@ -416,7 +416,7 @@ export default function AuraLanding() {
                     </div>
                   ))}
                 </div>
-                <a href={i === 2 ? "mailto:kaicarsaad455@gmail.com" : "https://aura-frontend-nu-jade.vercel.app"} style={{ display: "block", padding: "12px", textAlign: "center", background: plan.highlight ? CYAN : "transparent", color: plan.highlight ? "#050508" : "#ccccdd", border: plan.highlight ? "none" : "1px solid #ffffff22", fontSize: "13px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>{plan.cta}</a>
+                <a href={i === 2 ? "mailto:kaicarsaad455@gmail.com" : "/analyze"} style={{ display: "block", padding: "12px", textAlign: "center", background: plan.highlight ? CYAN : "transparent", color: plan.highlight ? "#050508" : "#ccccdd", border: plan.highlight ? "none" : "1px solid #ffffff22", fontSize: "13px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>{plan.cta}</a>
               </div>
             ))}
           </div>
@@ -434,7 +434,7 @@ export default function AuraLanding() {
           {lang === "it" ? "Backend open-source su GitHub. Deploy su Hugging Face Spaces." : "Open-source backend on GitHub. Deployed on Hugging Face Spaces."}
         </p>
         <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-          <a href="https://aura-frontend-nu-jade.vercel.app" className="btn-primary" style={{ padding: "14px 32px", background: CYAN, color: "#050508", fontSize: "13px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>
+          <a href="/analyze" className="btn-primary" style={{ padding: "14px 32px", background: CYAN, color: "#050508", fontSize: "13px", fontFamily: "inherit", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>
             {lang === "it" ? "Inizia ora →" : "Start now →"}
           </a>
           <a href="https://github.com/Artkill24/aura-backend" className="btn-outline" style={{ padding: "14px 32px", background: "transparent", color: "#ccccdd", border: "1px solid #ffffff22", fontSize: "13px", fontFamily: "inherit", cursor: "pointer", letterSpacing: "0.08em", textDecoration: "none" }}>GitHub ↗</a>
