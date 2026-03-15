@@ -22,6 +22,7 @@ from app.analyzers.virtual_cam import analyze_virtual_cam
 from app.analyzers.heatmap import generate_forensic_heatmaps
 from app.analyzers.forensic_inference import get_forensic_conclusion
 from app.analyzers.ai_narrative import generate_forensic_narrative
+from app.utils.blockchain import notarize_report, verify_on_chain
 from app.utils.qr_verify import save_qr_png
 from app.analyzers.rppg import analyze_rppg
 from app.report.generator import generate_pdf_report
@@ -114,6 +115,14 @@ async def analyze_video(
         # Genera QR code di verifica
         qr_path, verify_url = save_qr_png(job_id, file_sha256, str(OUTPUT_DIR))
         ai_narrative    = generate_forensic_narrative(verdict, metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, forensic)
+        # Blockchain notarization
+        blockchain = notarize_report(
+            job_id=job_id,
+            sha256_hash=file_sha256,
+            verdict=verdict.get("label","UNKNOWN"),
+            score=verdict.get("composite_score",0)
+        )
+
         heatmaps        = generate_forensic_heatmaps(str(video_path), str(OUTPUT_DIR), job_id)
 
         generate_pdf_report(
@@ -133,6 +142,7 @@ async def analyze_video(
             forensic=forensic,
             qr_path=qr_path,
             ai_narrative=ai_narrative.get("narrative"),
+            blockchain=blockchain,
             verify_url=verify_url,
             verdict=verdict,
             elapsed=elapsed,
@@ -162,6 +172,7 @@ async def analyze_video(
             "verify_url": verify_url,
             "ai_narrative": ai_narrative.get("narrative"),
             "ai_model": ai_narrative.get("model"),
+            "blockchain": blockchain,
         "report_url": f"/report/{job_id}",
     })
 
@@ -182,6 +193,8 @@ def get_report(job_id: str):
 
 @app.get("/verify/{job_id}")
 async def verify_report(job_id: str, h: str = ""):
+    # Check on-chain
+    on_chain = verify_on_chain(job_id)
     """Endpoint di verifica pubblica — scansionato dal QR nel PDF."""
     report_path = OUTPUT_DIR / f"AURA_Report_{job_id}.pdf"
     
@@ -212,6 +225,7 @@ async def verify_report(job_id: str, h: str = ""):
         "job_id": job_id,
         "pdf_sha256_prefix": pdf_hash[:16],
         "hash_match": hash_match,
+        "on_chain": on_chain,
         "verdict": meta.get("verdict_label", "N/A"),
         "composite_score": meta.get("composite_score", "N/A"),
         "filename": meta.get("filename", "N/A"),

@@ -99,6 +99,7 @@ def generate_pdf_report(
     qr_path: str = None,
     verify_url: str = None,
     ai_narrative: str = None,
+    blockchain: dict = None,
     video_path: str = None,
 ):
     # Chain of custody
@@ -238,6 +239,42 @@ def generate_pdf_report(
             "⚠ Questa narrativa è generata da un modello linguistico AI e deve essere verificata da un perito umano certificato.",
             ParagraphStyle("AIDisclaimer", parent=styles["Normal"], fontName="Courier-Oblique",
                 fontSize=7, textColor=HexColor("#888888"), leading=9)))
+
+
+    # ── Blockchain Notarization ───────────────────────────────────────────────
+    if blockchain and blockchain.get("tx_hash"):
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph("⛓ On-Chain Notarization — Polygon Amoy", styles["SectionTitle"]))
+        story.append(Spacer(1, 2 * mm))
+        bc_data = [
+            ["Network", "Polygon Amoy (Chain ID: 80002)"],
+            ["Contract", blockchain.get("contract", "N/A")],
+            ["TX Hash", blockchain.get("tx_hash", "N/A")],
+            ["Block", str(blockchain.get("block", "N/A"))],
+            ["Explorer", f"amoy.polygonscan.com/tx/{blockchain.get('tx_hash','')}"],
+        ]
+        bc_table = Table(bc_data, colWidths=[40*mm, 130*mm])
+        bc_table.setStyle(TableStyle([
+            ("FONTNAME",    (0,0),(-1,-1), "Courier"),
+            ("FONTSIZE",    (0,0),(-1,-1), 7),
+            ("TEXTCOLOR",   (0,0),(0,-1),  HexColor("#00e5ff")),
+            ("TEXTCOLOR",   (1,0),(1,-1),  HexColor("#e8e8e8")),
+            ("BACKGROUND",  (0,0),(-1,-1), HexColor("#050508")),
+            ("ROWBACKGROUNDS",(0,0),(-1,-1),[HexColor("#0a0a14"), HexColor("#050508")]),
+            ("GRID",        (0,0),(-1,-1), 0.3, HexColor("#1a1a2e")),
+            ("PADDING",     (0,0),(-1,-1), 4),
+        ]))
+        story.append(bc_table)
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(
+            "Questo report è stato notarizzato immutabilmente su blockchain Polygon. Il TX hash garantisce che verdict e hash SHA-256 esistessero al momento dell'analisi.",
+            ParagraphStyle("BCNote", parent=styles["Normal"], fontName="Courier-Oblique",
+                fontSize=7, textColor=HexColor("#555566"), leading=9)))
+    elif blockchain and blockchain.get("error"):
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(f"⛓ Blockchain: {blockchain.get('error')}", 
+            ParagraphStyle("BCErr", parent=styles["Normal"], fontName="Courier",
+                fontSize=7, textColor=HexColor("#444444"))))
 
     # ── QR Verification ──────────────────────────────────────────────────────
     if qr_path and os.path.exists(qr_path) and verify_url:
