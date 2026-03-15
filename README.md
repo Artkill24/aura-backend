@@ -1,3 +1,13 @@
+---
+title: AURA Reality Firewall
+emoji: 🔍
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+license: mit
+---
+
 # AURA — Reality Firewall
 
 **Advanced Universal Reality Authentication**  
