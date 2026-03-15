@@ -1,13 +1,3 @@
----
-title: AURA Reality Firewall
-emoji: 🔍
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-pinned: false
-license: mit
----
-
 # AURA — Reality Firewall
 
 **Advanced Universal Reality Authentication**  
@@ -302,7 +292,7 @@ Health check endpoint.
 - [x] QR-verifiable PDF with chain-of-custody
 - [x] Landing page IT/EN
 - [ ] Stripe payments (Free/Pro/Enterprise)
-- [x] Blockchain timestamping (Polygon Amoy) — AURANotary: 0x772f9b66C2884664bf6b18D2a263CfcaCa494849
+- [ ] Blockchain timestamping (Polygon)
 - [ ] C2PA Content Credentials check
 - [ ] Batch analysis API
 - [ ] Webhook notifications
