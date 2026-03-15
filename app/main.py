@@ -23,6 +23,7 @@ from app.analyzers.heatmap import generate_forensic_heatmaps
 from app.analyzers.forensic_inference import get_forensic_conclusion
 from app.analyzers.ai_narrative import generate_forensic_narrative
 from app.utils.blockchain import notarize_report, verify_on_chain
+from app.analyzers.c2pa import check_c2pa
 from app.utils.qr_verify import save_qr_png
 from app.analyzers.rppg import analyze_rppg
 from app.report.generator import generate_pdf_report
@@ -89,6 +90,7 @@ async def analyze_video(
     try:
         import hashlib as _hl
         file_sha256 = _hl.sha256(open(video_path,"rb").read()).hexdigest()
+        c2pa_result     = check_c2pa(str(video_path))
         metadata_result = analyze_metadata(str(video_path))
         visual_result   = await analyze_frames(str(video_path))
         audio_result    = analyze_audio_sync(str(video_path))
@@ -97,7 +99,7 @@ async def analyze_video(
         prnu_result     = analyze_prnu(str(video_path))
         vcam_result     = analyze_virtual_cam(str(video_path))
         rppg_result     = analyze_rppg(str(video_path))
-        verdict = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result)
+        verdict = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, c2pa_result)
         forensic        = get_forensic_conclusion(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, verdict)
         elapsed         = round(time.time() - start, 2)
 
@@ -173,6 +175,7 @@ async def analyze_video(
             "ai_narrative": ai_narrative.get("narrative"),
             "ai_model": ai_narrative.get("model"),
             "blockchain": blockchain,
+            "c2pa": c2pa_result,
         "report_url": f"/report/{job_id}",
     })
 
@@ -235,7 +238,7 @@ async def verify_report(job_id: str, h: str = ""):
     }
 
 
-def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moire: dict, prnu: dict = None, vcam: dict = None, rppg: dict = None) -> dict:
+def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moire: dict, prnu: dict = None, vcam: dict = None, rppg: dict = None, c2pa_result: dict = None) -> dict:
     """
     Pesi v0.5 — Tiered verdicts con confidence bands.
 
@@ -247,7 +250,7 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
     prnu     : 0.22  (sensor fingerprint)
     vcam     : 0.20  (virtual camera)
     """
-    weights = {"metadata": 0.07, "visual": 0.05, "audio": 0.07, "signal": 0.25, "moire": 0.08, "prnu": 0.14, "vcam": 0.13, "rppg": 0.18}
+    weights = {"metadata": 0.07, "visual": 0.05, "audio": 0.07, "signal": 0.23, "moire": 0.08, "prnu": 0.13, "vcam": 0.12, "rppg": 0.17, "c2pa": 0.08}
 
     meta_score   = metadata.get("manipulation_score", 0.0)
     visual_score = visual.get("deepfake_probability", 0.0)
@@ -257,6 +260,7 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
     prnu_score   = prnu.get("prnu_score", 0.0) if prnu else 0.0
     vcam_score   = vcam.get("virtual_cam_score", 0.0) if vcam else 0.0
     rppg_score   = rppg.get("rppg_score", 0.0) if rppg else 0.0
+    c2pa_score   = c2pa_result.get("c2pa_score", 0.35) if c2pa_result else 0.35
 
     # Shield: azzera signal solo se è vera screen recording (non AI)
     is_screen_recording = moire_score >= 0.5 and prnu_score < 0.4
@@ -272,7 +276,8 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
         moire_score  * weights["moire"] +
         prnu_score   * weights["prnu"] +
         vcam_score   * weights["vcam"] +
-        rppg_score   * weights["rppg"]
+        rppg_score   * weights["rppg"] +
+        c2pa_score   * weights["c2pa"]
     )
     composite = round(composite, 3)
 
