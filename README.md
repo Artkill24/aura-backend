@@ -302,7 +302,7 @@ Health check endpoint.
 - [x] QR-verifiable PDF with chain-of-custody
 - [x] Landing page IT/EN
 - [ ] Stripe payments (Free/Pro/Enterprise)
-- [ ] Blockchain timestamping (Polygon)
+- [x] Blockchain timestamping (Polygon Amoy) — AURANotary: 0x772f9b66C2884664bf6b18D2a263CfcaCa494849
 - [ ] C2PA Content Credentials check
 - [ ] Batch analysis API
 - [ ] Webhook notifications
