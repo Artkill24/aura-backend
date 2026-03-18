@@ -1,14 +1,16 @@
+from dotenv import load_dotenv
+load_dotenv()
 from datetime import datetime, timezone
 """
 AURA — Advanced Universal Reality Authentication
 Core Analysis Engine v0.3
 """
 
-import os
+import os, tempfile, hashlib
 import uuid
 import time
 from pathlib import Path
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -23,6 +25,8 @@ from app.analyzers.heatmap import generate_forensic_heatmaps
 from app.analyzers.forensic_inference import get_forensic_conclusion
 from app.analyzers.ai_narrative import generate_forensic_narrative
 from app.utils.blockchain import notarize_report, verify_on_chain
+from app.utils.link_analyzer import download_video, extract_video_info, is_supported_url
+from app.analyzers.semantic_ai import analyze_semantic
 from app.analyzers.c2pa import check_c2pa
 from app.utils.qr_verify import save_qr_png
 from app.analyzers.rppg import analyze_rppg
@@ -181,6 +185,117 @@ async def analyze_video(
 
 
 
+
+
+
+@app.post("/analyze-link")
+async def analyze_link(
+    background_tasks: BackgroundTasks,
+    url: str = Form(...),
+    language: str = Form(default="it"),
+):
+    """Analisi forense da URL (YouTube, X, TikTok, Vimeo...)."""
+    if not is_supported_url(url):
+        raise HTTPException(status_code=400, detail=f"URL non supportato. Piattaforme: YouTube, X, TikTok, Vimeo, Instagram")
+
+    job_id   = str(uuid.uuid4())
+    tmp_dir  = tempfile.mkdtemp()
+    report_path = OUTPUT_DIR / f"{job_id}.pdf"
+
+    try:
+        # Download video
+        dl = download_video(url, tmp_dir, tier="free")
+        if dl.get("error") or not dl.get("path"):
+            raise HTTPException(status_code=422, detail=f"Download failed: {dl.get('error','unknown')}")
+
+        video_path = dl["path"]
+        video_info = dl["info"]
+        file_sha256 = hashlib.sha256(open(video_path,"rb").read()).hexdigest()
+
+        # Pipeline forense standard (stessa di /analyze)
+        c2pa_result     = check_c2pa(video_path)
+        metadata_result = analyze_metadata(video_path)
+        visual_result   = await analyze_frames(video_path)
+        audio_result    = analyze_audio_sync(video_path)
+        signal_result   = analyze_signal_physics(video_path)
+        moire_result    = analyze_moire(video_path)
+        prnu_result     = analyze_prnu(video_path)
+        vcam_result     = analyze_virtual_cam(video_path)
+        rppg_result     = analyze_rppg(video_path)
+        verdict  = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, c2pa_result)
+        forensic = get_forensic_conclusion(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, verdict)
+        elapsed  = 0
+
+        # Layer scores per semantic
+        layer_scores = {
+            "signal":   signal_result.get("ai_signal_score", 0),
+            "prnu":     prnu_result.get("prnu_score", 0) if prnu_result else 0,
+            "rppg":     rppg_result.get("rppg_score", 0) if rppg_result else 0,
+            "vcam":     vcam_result.get("virtual_cam_score", 0) if vcam_result else 0,
+            "visual":   visual_result.get("deepfake_probability", 0),
+        }
+
+        # Semantic AI (Qwen2-VL o Groq fallback)
+        semantic = analyze_semantic(
+            video_path=video_path,
+            url=url,
+            video_info=video_info,
+            layer_scores=layer_scores,
+            language=language,
+        )
+
+        # AI narrative + blockchain + QR
+        ai_narrative = generate_forensic_narrative(verdict, metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, forensic, language=language)
+        blockchain   = notarize_report(job_id=job_id, sha256_hash=file_sha256, verdict=verdict.get("label","UNKNOWN"), score=verdict.get("composite_score",0))
+        qr_path, verify_url = save_qr_png(job_id, file_sha256, str(OUTPUT_DIR))
+        heatmaps = generate_forensic_heatmaps(video_path, str(OUTPUT_DIR), job_id)
+
+        generate_pdf_report(
+            output_path=str(report_path),
+            job_id=job_id,
+            filename=url,
+            video_path=video_path,
+            metadata=metadata_result,
+            visual=visual_result,
+            audio=audio_result,
+            signal=signal_result,
+            moire=moire_result,
+            prnu=prnu_result,
+            vcam=vcam_result,
+            heatmaps=heatmaps,
+            rppg=rppg_result,
+            forensic=forensic,
+            qr_path=qr_path,
+            ai_narrative=ai_narrative.get("narrative"),
+            blockchain=blockchain,
+            verify_url=verify_url,
+            verdict=verdict,
+            elapsed=elapsed,
+        )
+
+        # Salva meta per /verify
+        import json as _json
+        with open(OUTPUT_DIR / f"{job_id}_meta.json", "w") as _mf:
+            _json.dump({"verdict_label": verdict.get("label"), "composite_score": verdict.get("composite_score"), "filename": url, "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, _mf)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Link analysis failed: {str(e)}")
+    finally:
+        background_tasks.add_task(cleanup_file, tmp_dir)
+
+    return JSONResponse({
+        "job_id":       job_id,
+        "url":          url,
+        "video_info":   video_info,
+        "verdict":      verdict,
+        "semantic_ai":  semantic,
+        "blockchain":   blockchain,
+        "c2pa":         c2pa_result,
+        "report_url":   f"/report/{job_id}",
+        "verify_url":   verify_url,
+    })
 
 @app.get("/report/{job_id}")
 def get_report(job_id: str):
