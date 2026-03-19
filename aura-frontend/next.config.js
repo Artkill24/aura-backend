@@ -3,7 +3,7 @@ const nextConfig = {
   async rewrites() {
     return [{ 
       source: "/api/backend/:path*", 
-      destination: "https://artkill24-aura-backend.hf.space/:path*" 
+      destination: "https://giving-elegance-production.up.railway.app/:path*" 
     }];
   },
   httpAgentOptions: { keepAlive: true },
