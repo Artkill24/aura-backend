@@ -76,6 +76,10 @@ def download_video(url: str, output_dir: str, tier: str = "free") -> Dict[str, A
             "outtmpl":          out_template,
             "quiet":            True,
             "no_warnings":      True,
+            "nocheckcertificate": True,
+            "geo_bypass":        True,
+            "sleep_interval":    1,
+            "max_sleep_interval": 3,
             "max_filesize":     MAX_FILESIZE_MB * 1024 * 1024,
             "merge_output_format": "mp4",
             "postprocessors":   [{
