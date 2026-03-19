@@ -248,6 +248,12 @@ async def analyze_link(
             "visual":   visual_result.get("deepfake_probability", 0),
         }
 
+        # Layer 10 Generative Origin
+        gen_origin = analyze_generative_origin(
+            video_path=video_path,
+            layer_scores=layer_scores,
+        )
+
         # Semantic AI (Qwen2-VL o Groq fallback)
         semantic = analyze_semantic(
             video_path=video_path,
