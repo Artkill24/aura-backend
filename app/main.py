@@ -26,7 +26,7 @@ from app.analyzers.forensic_inference import get_forensic_conclusion
 from app.analyzers.ai_narrative import generate_forensic_narrative
 from app.utils.blockchain import notarize_report, verify_on_chain
 from app.utils.link_analyzer import download_video, extract_video_info, is_supported_url
-from app.analyzers.semantic_ai import analyze_semantic
+from app.analyzers.semantic_ai import analyze_semantic, analyze_generative_origin
 from app.analyzers.c2pa import check_c2pa
 from app.utils.qr_verify import save_qr_png
 from app.analyzers.rppg import analyze_rppg
@@ -159,6 +159,16 @@ async def analyze_video(
     finally:
         background_tasks.add_task(cleanup_file, str(video_path))
 
+        gen_origin = analyze_generative_origin(
+            video_path=str(video_path),
+            layer_scores={
+                "signal": signal_result.get("ai_signal_score",0),
+                "prnu": prnu_result.get("prnu_score",0) if prnu_result else 0,
+                "rppg": rppg_result.get("rppg_score",0) if rppg_result else 0,
+                "vcam": vcam_result.get("virtual_cam_score",0) if vcam_result else 0,
+                "visual": visual_result.get("deepfake_probability",0),
+            }
+        )
     return JSONResponse({
         "job_id": job_id,
         "filename": file.filename,
@@ -180,6 +190,7 @@ async def analyze_video(
             "ai_model": ai_narrative.get("model"),
             "blockchain": blockchain,
             "c2pa": c2pa_result,
+        "generative_origin": gen_origin,
         "report_url": f"/report/{job_id}",
     })
 
@@ -222,6 +233,7 @@ async def analyze_link(
         prnu_result     = analyze_prnu(video_path)
         vcam_result     = analyze_virtual_cam(video_path)
         rppg_result     = analyze_rppg(video_path)
+
         verdict  = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, c2pa_result)
         forensic = get_forensic_conclusion(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, verdict)
         elapsed  = 0
@@ -293,6 +305,7 @@ async def analyze_link(
         "semantic_ai":  semantic,
         "blockchain":   blockchain,
         "c2pa":         c2pa_result,
+            "generative_origin": gen_origin,
         "report_url":   f"/report/{job_id}",
         "verify_url":   verify_url,
     })
