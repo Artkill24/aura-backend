@@ -100,6 +100,7 @@ def generate_pdf_report(
     verify_url: str = None,
     ai_narrative: str = None,
     blockchain: dict = None,
+    gen_origin: dict = None,
     video_path: str = None,
 ):
     # Chain of custody
@@ -223,6 +224,40 @@ def generate_pdf_report(
         for i, rec in enumerate(forensic.get("recommendations", []), 1):
             story.append(Paragraph(f"{i}. {rec}", ParagraphStyle("Rec", parent=styles["Normal"], fontName="Courier", fontSize=8, textColor=HexColor("#cccccc"), leading=11, leftIndent=8)))
             story.append(Spacer(1, 1 * mm))
+
+    # ── Layer 10 — Generative Origin ──────────────────────────────────────────
+    if gen_origin and gen_origin.get("origin_verdict"):
+        story.append(Spacer(1, 5 * mm))
+        verdict_color = {"AI-PRODUCED": "#ff2d55", "MANUAL/EDITED": "#00e87a", "SCREEN-RECORDED": "#f59e0b"}.get(gen_origin.get("origin_verdict",""), "#666677")
+        story.append(Paragraph("Layer 10 — Generative Origin Detector", styles["SectionTitle"]))
+        story.append(Spacer(1, 2 * mm))
+        origin_data = [
+            ["Origin Verdict", gen_origin.get("origin_verdict","N/A")],
+            ["Probability AI", f"{gen_origin.get('probability_ai',0):.0%}"],
+            ["Probability Manual", f"{gen_origin.get('probability_manual',0):.0%}"],
+            ["Likely Tool", gen_origin.get("generative_tool","Unknown")],
+            ["Confidence", gen_origin.get("confidence","N/A")],
+        ]
+        origin_table = Table(origin_data, colWidths=[45*mm, 125*mm])
+        origin_table.setStyle(TableStyle([
+            ("FONTNAME",  (0,0),(-1,-1), "Courier"),
+            ("FONTSIZE",  (0,0),(-1,-1), 8),
+            ("TEXTCOLOR", (0,0),(0,-1),  HexColor("#00e5ff")),
+            ("TEXTCOLOR", (1,0),(1,-1),  HexColor(verdict_color)),
+            ("BACKGROUND",(0,0),(-1,-1), HexColor("#050508")),
+            ("ROWBACKGROUNDS",(0,0),(-1,-1),[HexColor("#0a0a14"), HexColor("#050508")]),
+            ("GRID",      (0,0),(-1,-1), 0.3, HexColor("#1a1a2e")),
+            ("PADDING",   (0,0),(-1,-1), 4),
+        ]))
+        story.append(origin_table)
+        reasons = gen_origin.get("key_reasons", [])
+        if reasons:
+            story.append(Spacer(1, 3 * mm))
+            story.append(Paragraph("Key Evidence:", ParagraphStyle("EvidTitle", parent=styles["Normal"], fontName="Courier-Bold", fontSize=8, textColor=HexColor("#00e5ff"))))
+            for r in reasons[:5]:
+                story.append(Paragraph(f"→ {r}", ParagraphStyle("EvidItem", parent=styles["Normal"], fontName="Courier", fontSize=7, textColor=HexColor("#888899"), leading=10)))
+        story.append(Spacer(1, 3 * mm))
+
     # ── AI Narrative ──────────────────────────────────────────────────────────
     if ai_narrative:
         story.append(Spacer(1, 5 * mm))
