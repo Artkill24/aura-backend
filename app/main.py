@@ -112,6 +112,8 @@ async def analyze_video(
             f.write(chunk)
 
     start = time.time()
+    pdf_public_url = ""
+    gen_origin = {}
     try:
         import hashlib as _hl
         file_sha256 = _hl.sha256(open(video_path,"rb").read()).hexdigest()
@@ -152,6 +154,16 @@ async def analyze_video(
 
         heatmaps        = generate_forensic_heatmaps(str(video_path), str(OUTPUT_DIR), job_id)
 
+        gen_origin = analyze_generative_origin(
+            video_path=str(video_path),
+            layer_scores={
+                "signal": signal_result.get("ai_signal_score",0),
+                "prnu": prnu_result.get("prnu_score",0) if prnu_result else 0,
+                "rppg": rppg_result.get("rppg_score",0) if rppg_result else 0,
+                "vcam": vcam_result.get("virtual_cam_score",0) if vcam_result else 0,
+                "visual": visual_result.get("deepfake_probability",0),
+            }
+        )
         generate_pdf_report(
             output_path=str(report_path),
             job_id=job_id,
@@ -183,16 +195,6 @@ async def analyze_video(
     finally:
         background_tasks.add_task(cleanup_file, str(video_path))
 
-        gen_origin = analyze_generative_origin(
-            video_path=str(video_path),
-            layer_scores={
-                "signal": signal_result.get("ai_signal_score",0),
-                "prnu": prnu_result.get("prnu_score",0) if prnu_result else 0,
-                "rppg": rppg_result.get("rppg_score",0) if rppg_result else 0,
-                "vcam": vcam_result.get("virtual_cam_score",0) if vcam_result else 0,
-                "visual": visual_result.get("deepfake_probability",0),
-            }
-        )
     return JSONResponse({
         "job_id": job_id,
         "filename": file.filename,
