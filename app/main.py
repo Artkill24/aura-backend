@@ -79,6 +79,26 @@ def upload_pdf_to_supabase(pdf_path: str, job_id: str) -> str:
     except Exception as e:
         return ""
 
+
+def save_analysis_to_db(job_id: str, filename: str, verdict_label: str,
+                         composite_score: float, origin_verdict: str,
+                         pdf_url: str, blockchain_tx: str = "", user_email: str = ""):
+    """Salva analisi su Supabase per dashboard utente."""
+    try:
+        from supabase import create_client
+        sb = create_client(
+            os.environ.get("SUPABASE_URL", "https://vtqrojazozbqbhgozbor.supabase.co"),
+            os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0cXJvamF6b3picWJoZ296Ym9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NjIzNDMsImV4cCI6MjA4OTUzODM0M30.5oGA-s21e-JkN1faCVupinwxwC1bheuKppbFUvWZv5g")
+        )
+        sb.table("aura_analyses").insert({
+            "job_id": job_id, "user_email": user_email or "anonymous",
+            "filename": filename[:200], "verdict_label": verdict_label,
+            "composite_score": composite_score, "origin_verdict": origin_verdict,
+            "pdf_url": pdf_url, "blockchain_tx": blockchain_tx,
+        }).execute()
+    except Exception:
+        pass  # Non bloccare l'analisi se DB fallisce
+
 @app.get("/health")
 def health():
     return {"status": "online", "engine": "AURA v0.3", "ready": True}
