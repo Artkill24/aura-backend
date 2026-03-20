@@ -29,6 +29,7 @@ from app.utils.feedback import save_feedback, run_prompt_refinement
 from app.utils.link_analyzer import download_video, extract_video_info, is_supported_url
 from app.analyzers.semantic_ai import analyze_semantic, analyze_generative_origin
 from app.analyzers.c2pa import check_c2pa
+from app.analyzers.temporal_coherence import analyze_temporal_coherence
 from app.utils.qr_verify import save_qr_png
 from app.analyzers.rppg import analyze_rppg
 from app.report.generator import generate_pdf_report
@@ -117,6 +118,7 @@ async def analyze_video(
     try:
         import hashlib as _hl
         file_sha256 = _hl.sha256(open(video_path,"rb").read()).hexdigest()
+        temporal_result = analyze_temporal_coherence(str(video_path))
         c2pa_result     = check_c2pa(str(video_path))
         metadata_result = analyze_metadata(str(video_path))
         visual_result   = await analyze_frames(str(video_path))
@@ -217,6 +219,7 @@ async def analyze_video(
             "blockchain": blockchain,
             "c2pa": c2pa_result,
         "generative_origin": gen_origin,
+        "temporal_coherence": temporal_result,
         "report_url": f"/report/{job_id}",
         "pdf_url": pdf_public_url if pdf_public_url else f"/report/{job_id}",
     })
@@ -261,7 +264,7 @@ async def analyze_link(
         vcam_result     = analyze_virtual_cam(video_path)
         rppg_result     = analyze_rppg(video_path)
 
-        verdict  = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, c2pa_result)
+        verdict  = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, c2pa_result, temporal_result)
         forensic = get_forensic_conclusion(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, verdict)
         elapsed  = 0
 
@@ -340,6 +343,7 @@ async def analyze_link(
         "blockchain":   blockchain,
         "c2pa":         c2pa_result,
             "generative_origin": gen_origin,
+        "temporal_coherence": temporal_result,
         "report_url":   f"/report/{job_id}",
         "verify_url":   verify_url,
     })
@@ -430,7 +434,7 @@ async def verify_report(job_id: str, h: str = ""):
     }
 
 
-def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moire: dict, prnu: dict = None, vcam: dict = None, rppg: dict = None, c2pa_result: dict = None) -> dict:
+def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moire: dict, prnu: dict = None, vcam: dict = None, rppg: dict = None, c2pa_result: dict = None, temporal: dict = None) -> dict:
     """
     Pesi v0.5 — Tiered verdicts con confidence bands.
 
@@ -442,7 +446,7 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
     prnu     : 0.22  (sensor fingerprint)
     vcam     : 0.20  (virtual camera)
     """
-    weights = {"metadata": 0.07, "visual": 0.05, "audio": 0.07, "signal": 0.23, "moire": 0.08, "prnu": 0.13, "vcam": 0.12, "rppg": 0.17, "c2pa": 0.08}
+    weights = {"metadata": 0.07, "visual": 0.05, "audio": 0.07, "signal": 0.22, "moire": 0.07, "prnu": 0.12, "vcam": 0.11, "rppg": 0.16, "c2pa": 0.08, "temporal": 0.05}
 
     meta_score   = metadata.get("manipulation_score", 0.0)
     visual_score = visual.get("deepfake_probability", 0.0)
@@ -452,7 +456,8 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
     prnu_score   = prnu.get("prnu_score", 0.0) if prnu else 0.0
     vcam_score   = vcam.get("virtual_cam_score", 0.0) if vcam else 0.0
     rppg_score   = rppg.get("rppg_score", 0.0) if rppg else 0.0
-    c2pa_score   = c2pa_result.get("c2pa_score", 0.35) if c2pa_result else 0.35
+    c2pa_score     = c2pa_result.get("c2pa_score", 0.35) if c2pa_result else 0.35
+    temporal_score = temporal.get("temporal_score", 0.20) if temporal else 0.20
 
     # Shield: azzera signal solo se è vera screen recording (non AI)
     is_screen_recording = moire_score >= 0.5 and prnu_score < 0.4
@@ -469,7 +474,8 @@ def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moi
         prnu_score   * weights["prnu"] +
         vcam_score   * weights["vcam"] +
         rppg_score   * weights["rppg"] +
-        c2pa_score   * weights["c2pa"]
+        c2pa_score   * weights["c2pa"] +
+        temporal_score * weights["temporal"]
     )
     composite = round(composite, 3)
 
