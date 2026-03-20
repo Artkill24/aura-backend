@@ -7,6 +7,28 @@ export default function ResultPage() {
   const router    = useRouter();
   const [result, setResult] = useState<any>(null);
   const [bars, setBars]     = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [comment, setComment]   = useState("");
+  const [fbSent, setFbSent]     = useState(false);
+  const [fbLoading, setFbLoading] = useState(false);
+
+  const submitFeedback = async (fb: string) => {
+    setFeedback(fb);
+    setFbLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("job_id", result.job_id);
+      fd.append("feedback", fb);
+      fd.append("verdict_label", result.verdict?.label || "");
+      fd.append("composite_score", String(result.verdict?.composite_score || 0));
+      fd.append("origin_verdict", result.generative_origin?.origin_verdict || "");
+      fd.append("attack_vector", result.forensic_conclusion?.attack_vector || "");
+      fd.append("comment", comment);
+      await fetch("/api/backend/feedback", { method: "POST", body: fd });
+      setFbSent(true);
+    } catch {}
+    setFbLoading(false);
+  };
 
   useEffect(() => {
     const stored = sessionStorage.getItem(`aura_result_${jobId}`);
@@ -240,6 +262,42 @@ export default function ResultPage() {
             })}
           </div>
         )}
+
+
+        {/* ── FEEDBACK ── */}
+        <div style={{ border: "1px solid #ffffff08", padding: "1.5rem", marginBottom: "1.5rem", background: "#07070d", animation: "fadeIn 0.5s ease 0.38s both" }}>
+          <div style={{ fontSize: "10px", color: "#333344", letterSpacing: "0.12em", marginBottom: "1rem" }}>◈ FEEDBACK — AIUTA AURA A MIGLIORARE</div>
+          {!fbSent ? (
+            <>
+              <div style={{ fontSize: "12px", color: "#555566", marginBottom: "1rem" }}>Il verdetto era corretto?</div>
+              <div style={{ display: "flex", gap: "8px", marginBottom: "1rem" }}>
+                {[["correct","✓ Corretto","#00e87a"],["partial","~ Parziale","#ffb700"],["incorrect","✗ Errato","#ff2d55"]].map(([val, label, color]) => (
+                  <button key={val} onClick={() => setFeedback(val as string)}
+                    style={{ fontFamily: "inherit", fontSize: "11px", padding: "8px 14px", background: feedback === val ? color + "22" : "transparent", color: feedback === val ? color : "#444455", border: `1px solid ${feedback === val ? color : "#ffffff08"}`, cursor: "pointer", letterSpacing: "0.06em", transition: "all 0.2s" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {feedback && (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Commento opzionale (es. 'era un video Kling')"
+                    value={comment}
+                    onChange={e => setComment(e.target.value)}
+                    style={{ width: "100%", padding: "8px 12px", background: "#050508", border: "1px solid #ffffff08", color: "#e8e8f0", fontFamily: "inherit", fontSize: "11px", marginBottom: "8px" }}
+                  />
+                  <button onClick={() => submitFeedback(feedback)} disabled={fbLoading}
+                    style={{ fontFamily: "inherit", fontSize: "11px", padding: "8px 20px", background: "#00e5ff", color: "#050508", border: "none", cursor: fbLoading ? "wait" : "pointer", fontWeight: 700, letterSpacing: "0.08em" }}>
+                    {fbLoading ? "Invio..." : "Invia feedback →"}
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: "12px", color: "#00e87a" }}>✓ Grazie! Il feedback aiuterà AURA ad auto-migliorarsi.</div>
+          )}
+        </div>
 
         {/* ── ACTIONS ── */}
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", animation: "fadeIn 0.5s ease 0.4s both" }}>

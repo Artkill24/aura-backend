@@ -25,6 +25,7 @@ from app.analyzers.heatmap import generate_forensic_heatmaps
 from app.analyzers.forensic_inference import get_forensic_conclusion
 from app.analyzers.ai_narrative import generate_forensic_narrative
 from app.utils.blockchain import notarize_report, verify_on_chain
+from app.utils.feedback import save_feedback, run_prompt_refinement
 from app.utils.link_analyzer import download_video, extract_video_info, is_supported_url
 from app.analyzers.semantic_ai import analyze_semantic, analyze_generative_origin
 from app.analyzers.c2pa import check_c2pa
@@ -329,6 +330,36 @@ def get_report(job_id: str):
         filename=f"AURA_Report_{job_id}.pdf",
     )
 
+
+
+@app.post("/feedback")
+async def submit_feedback(
+    background_tasks: BackgroundTasks,
+    job_id: str = Form(...),
+    feedback: str = Form(...),
+    verdict_label: str = Form(default=""),
+    composite_score: float = Form(default=0.0),
+    origin_verdict: str = Form(default=""),
+    attack_vector: str = Form(default=""),
+    comment: str = Form(default=""),
+):
+    """Salva feedback utente + triggera refinement automatico ogni 20 feedback."""
+    result = save_feedback(
+        job_id=job_id,
+        feedback=feedback,
+        verdict_label=verdict_label,
+        composite_score=composite_score,
+        origin_verdict=origin_verdict,
+        attack_vector=attack_vector,
+        comment=comment,
+    )
+    if result.get("trigger_refinement"):
+        background_tasks.add_task(run_prompt_refinement)
+    return JSONResponse({
+        "saved": result["saved"],
+        "error": result["error"],
+        "refinement_triggered": result.get("trigger_refinement", False),
+    })
 
 @app.get("/verify/{job_id}")
 async def verify_report(job_id: str, h: str = ""):

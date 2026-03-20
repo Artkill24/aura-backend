@@ -31,3 +31,4 @@ c2pa-python
 yt-dlp
 web3
 py-solc-x
+supabase
