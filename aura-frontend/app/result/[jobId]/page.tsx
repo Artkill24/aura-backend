@@ -302,7 +302,7 @@ export default function ResultPage() {
         {/* ── ACTIONS ── */}
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", animation: "fadeIn 0.5s ease 0.4s both" }}>
           <a
-            href={`/api/backend${result.report_url}`}
+            href={result.pdf_url && result.pdf_url.startsWith("http") ? result.pdf_url : `/api/backend${result.report_url}`}
             download={`AURA_${result.job_id}.pdf`}
             className="btn"
             style={{ fontFamily: "inherit", fontSize: "12px", padding: "12px 24px", border: `1px solid ${CYAN}`, color: CYAN, background: "transparent", textDecoration: "none", cursor: "pointer", letterSpacing: "0.08em", transition: "opacity 0.2s" }}

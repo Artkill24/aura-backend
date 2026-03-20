@@ -58,6 +58,26 @@ ALLOWED_TYPES = {
 }
 
 
+
+def upload_pdf_to_supabase(pdf_path: str, job_id: str) -> str:
+    """Upload PDF su Supabase Storage e ritorna URL pubblico."""
+    try:
+        from supabase import create_client
+        sb = create_client(
+            os.environ.get("SUPABASE_URL", "https://vtqrojazozbqbhgozbor.supabase.co"),
+            os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0cXJvamF6b3picWJoZ296Ym9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NjIzNDMsImV4cCI6MjA4OTUzODM0M30.5oGA-s21e-JkN1faCVupinwxwC1bheuKppbFUvWZv5g")
+        )
+        filename = f"AURA_Report_{job_id}.pdf"
+        with open(pdf_path, "rb") as f:
+            sb.storage.from_("aura-reports").upload(
+                filename, f.read(),
+                file_options={"content-type": "application/pdf", "upsert": "true"}
+            )
+        url = sb.storage.from_("aura-reports").get_public_url(filename)
+        return url
+    except Exception as e:
+        return ""
+
 @app.get("/health")
 def health():
     return {"status": "online", "engine": "AURA v0.3", "ready": True}
@@ -156,6 +176,8 @@ async def analyze_video(
             elapsed=elapsed,
         )
 
+        # Upload PDF su Supabase Storage
+        pdf_public_url = upload_pdf_to_supabase(str(report_path), job_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
     finally:
@@ -194,6 +216,7 @@ async def analyze_video(
             "c2pa": c2pa_result,
         "generative_origin": gen_origin,
         "report_url": f"/report/{job_id}",
+        "pdf_url": pdf_public_url if pdf_public_url else f"/report/{job_id}",
     })
 
 
