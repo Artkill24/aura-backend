@@ -264,6 +264,7 @@ async def analyze_link(
     report_path = OUTPUT_DIR / f"{job_id}.pdf"
 
     temporal_result = {}
+    pdf_link_url = ""
     try:
         # Download video
         dl = download_video(url, tmp_dir, tier="free")
