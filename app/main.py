@@ -297,6 +297,12 @@ async def analyze_link(
             "visual":   visual_result.get("deepfake_probability", 0),
         }
 
+        # Layer 11 Temporal Coherence
+        temporal_result = analyze_temporal_coherence(video_path)
+
+        # Layer 11 Temporal Coherence
+        temporal_result = analyze_temporal_coherence(video_path)
+
         # Layer 10 Generative Origin
         gen_origin = analyze_generative_origin(
             video_path=video_path,
