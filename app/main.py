@@ -263,6 +263,7 @@ async def analyze_link(
     tmp_dir  = tempfile.mkdtemp()
     report_path = OUTPUT_DIR / f"{job_id}.pdf"
 
+    temporal_result = {}
     try:
         # Download video
         dl = download_video(url, tmp_dir, tier="free")
@@ -301,7 +302,6 @@ async def analyze_link(
         temporal_result = analyze_temporal_coherence(video_path)
 
         # Layer 11 Temporal Coherence
-        temporal_result = analyze_temporal_coherence(video_path)
 
         # Layer 10 Generative Origin
         gen_origin = analyze_generative_origin(
