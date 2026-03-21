@@ -349,6 +349,8 @@ async def analyze_link(
             elapsed=elapsed,
         )
 
+        pdf_link_url = upload_pdf_to_supabase(str(report_path), job_id)
+
         # Salva meta per /verify
         import json as _json
         with open(OUTPUT_DIR / f"{job_id}_meta.json", "w") as _mf:
@@ -371,6 +373,7 @@ async def analyze_link(
         "c2pa":         c2pa_result,
             "generative_origin": gen_origin,
         "temporal_coherence": temporal_result,
+        "pdf_url": pdf_link_url if pdf_link_url else None,
         "report_url":   f"/report/{job_id}",
         "verify_url":   verify_url,
     })
