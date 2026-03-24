@@ -66,6 +66,14 @@ def download_video(url: str, output_dir: str, tier: str = "free") -> Dict[str, A
 
     try:
         import yt_dlp
+        import base64 as _b64, tempfile as _tmp3
+        _cb64 = os.environ.get("YOUTUBE_COOKIES_B64", "")
+        if _cb64:
+            _cf = _tmp3.NamedTemporaryFile(mode="wb", suffix="_yt_cookies.txt", delete=False)
+            _cf.write(_b64.b64decode(_cb64)); _cf.close()
+            cookies_path = _cf.name
+        else:
+            cookies_path = os.path.join(os.path.dirname(__file__), "youtube_cookies.txt")
 
         # Prima estrai info
         info = extract_video_info(url)
