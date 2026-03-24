@@ -13,7 +13,7 @@ SUPPORTED_DOMAINS = [
     "dailymotion.com", "twitch.tv", "rumble.com",
 ]
 
-MAX_DURATION_FREE = 180   # 3 min free tier
+MAX_DURATION_FREE = 300   # 3 min free tier
 MAX_DURATION_PRO  = 600   # 10 min pro tier
 MAX_FILESIZE_MB   = 150
 
