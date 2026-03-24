@@ -26,6 +26,14 @@ def extract_video_info(url: str) -> Dict[str, Any]:
     """Estrai metadati senza scaricare."""
     try:
         import yt_dlp
+        import base64 as _b64, tempfile as _tmp2
+        _cb64 = os.environ.get("YOUTUBE_COOKIES_B64", "")
+        if _cb64:
+            _cf = _tmp2.NamedTemporaryFile(mode="wb", suffix="_yt_cookies.txt", delete=False)
+            _cf.write(_b64.b64decode(_cb64)); _cf.close()
+            cookies_path = _cf.name
+        else:
+            cookies_path = os.path.join(os.path.dirname(__file__), "youtube_cookies.txt")
         ydl_opts = {
             "quiet": True, "no_warnings": True, "skip_download": True,
             "cookiefile": cookies_path if os.path.exists(cookies_path) else None,
