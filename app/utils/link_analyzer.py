@@ -26,7 +26,12 @@ def extract_video_info(url: str) -> Dict[str, Any]:
     """Estrai metadati senza scaricare."""
     try:
         import yt_dlp
-        ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+        ydl_opts = {
+            "quiet": True, "no_warnings": True, "skip_download": True,
+            "cookiefile": cookies_path if os.path.exists(cookies_path) else None,
+            "proxy": ("http://" + os.environ.get("PROXY_USER","") + ":" + os.environ.get("PROXY_PASS","") + "@" + os.environ.get("PROXY_HOST","") + ":" + os.environ.get("PROXY_PORT","") + "/") if os.environ.get("PROXY_HOST") else None,
+            "extractor_args": {"youtube": {"player_client": ["web", "android"]}},
+        }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return {
