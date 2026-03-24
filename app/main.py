@@ -64,19 +64,25 @@ def upload_pdf_to_supabase(pdf_path: str, job_id: str) -> str:
     """Upload PDF su Supabase Storage e ritorna URL pubblico."""
     try:
         from supabase import create_client
+        import logging
         sb = create_client(
             os.environ.get("SUPABASE_URL", "https://vtqrojazozbqbhgozbor.supabase.co"),
             os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0cXJvamF6b3picWJoZ296Ym9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NjIzNDMsImV4cCI6MjA4OTUzODM0M30.5oGA-s21e-JkN1faCVupinwxwC1bheuKppbFUvWZv5g")
         )
         filename = f"AURA_Report_{job_id}.pdf"
+        import os as _os
+        logging.warning(f"UPLOAD: path={pdf_path} exists={_os.path.exists(pdf_path)}")
         with open(pdf_path, "rb") as f:
             sb.storage.from_("aura-reports").upload(
                 filename, f.read(),
                 file_options={"content-type": "application/pdf", "upsert": "true"}
             )
         url = sb.storage.from_("aura-reports").get_public_url(filename)
+        logging.warning(f"UPLOAD OK: {url}")
         return url
     except Exception as e:
+        import logging as _log
+        _log.error(f"UPLOAD ERROR: {e}")
         return ""
 
 

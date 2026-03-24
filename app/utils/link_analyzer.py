@@ -77,6 +77,7 @@ def download_video(url: str, output_dir: str, tier: str = "free") -> Dict[str, A
             "quiet":            True,
             "no_warnings":      True,
             "nocheckcertificate": True,
+            "proxy": f"http://{os.environ.get('PROXY_USER','')}:{os.environ.get('PROXY_PASS','')}@{os.environ.get('PROXY_HOST','')}:{os.environ.get('PROXY_PORT','')}/" if os.environ.get("PROXY_HOST") else None,
             "geo_bypass":        True,
             "sleep_interval":    1,
             "max_sleep_interval": 3,
