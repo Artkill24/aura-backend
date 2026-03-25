@@ -7,6 +7,6 @@ const nextConfig = {
     }];
   },
   httpAgentOptions: { keepAlive: true },
-  experimental: { proxyTimeout: 300000 },
+  experimental: { proxyTimeout: 600000 },
 };
 export default nextConfig;
