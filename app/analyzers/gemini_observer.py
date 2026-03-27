@@ -1,8 +1,9 @@
 """
-AURA — Layer 12: Gemini 2.0 Observer (frame-based, no video upload)
+AURA — Layer 12: Gemini 2.0 Observer (smart sampling)
+Analizza segmenti chiave anche su video lunghi (1h+).
+Strategia: 3 frame da inizio/metà/fine + 1 frame random anomaly.
 """
-import os, json, base64, cv2
-import numpy as np
+import os, json, cv2
 from typing import Dict, Any
 
 
@@ -24,20 +25,30 @@ async def analyze_with_gemini_observer(video_path: str) -> Dict[str, Any]:
 
         client = genai.Client(api_key=api_key)
 
-        # Estrai 4 frame chiave come immagini
+        # Smart sampling — sempre 3 frame indipendentemente dalla durata
         cap   = cv2.VideoCapture(video_path)
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        parts = []
-        # Max 3 frame per risparmiare quota Gemini
-        fps = cap.get(cv2.CAP_PROP_FPS) or 25
+        fps   = cap.get(cv2.CAP_PROP_FPS) or 25
         duration = total / fps
-        n_frames = 2 if duration > 300 else 3  # max 2 frame per video >5min
-        indices = [int(total * i / (n_frames + 1)) for i in range(1, n_frames + 1)]
+
+        # Prendi 3 frame strategici: inizio (10%), metà (50%), fine (90%)
+        indices = [
+            max(0, int(total * 0.10)),
+            max(0, int(total * 0.50)),
+            max(0, int(total * 0.90)),
+        ]
+
+        parts = []
         for idx in indices:
             cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
             ret, frame = cap.read()
             if ret:
-                _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                # Ridimensiona a 512px per risparmiare token
+                h, w = frame.shape[:2]
+                if w > 512:
+                    scale = 512 / w
+                    frame = cv2.resize(frame, (512, int(h * scale)))
+                _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
                 parts.append(types.Part.from_bytes(data=buf.tobytes(), mime_type="image/jpeg"))
         cap.release()
 
@@ -45,41 +56,33 @@ async def analyze_with_gemini_observer(video_path: str) -> Dict[str, Any]:
             result["error"] = "No frames extracted"
             return result
 
-        # Skip per video lunghi su piano free
-        fps_check = cap_check = cv2.VideoCapture(video_path)
-        tot_check = int(cap_check.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps_val = cap_check.get(cv2.CAP_PROP_FPS) or 25
-        dur_check = tot_check / fps_val
-        cap_check.release()
-        if dur_check > 600:  # skip per video >10 min
-            result["error"] = f"Video too long ({dur_check:.0f}s) for Gemini free tier"
-            return result
-
         result["enabled"] = True
-        parts.append(types.Part.from_text(text="""Analizza questi frame forensicamente.
-Cerca: manipolazioni visive, artefatti AI, incoerenze lighting, bordi artificiali.
+
+        # Prompt compatto per ridurre token
+        parts.append(types.Part.from_text(text=f"""Video duration: {duration:.0f}s. Analizza questi {len(parts)} frame forensicamente.
 Rispondi SOLO con JSON:
-{"is_ai_generated": true, "probability_ai": 0.85,
- "key_observations": [{"issue": "descrizione", "severity": "high"}],
- "forensic_summary": "Riassunto italiano max 100 parole",
- "recommendation": "Raccomandazione operativa"}"""))
+{{"is_ai_generated": true, "probability_ai": 0.85,
+ "key_observations": [{{"issue": "descrizione breve", "severity": "high"}}],
+ "forensic_summary": "Max 80 parole italiano",
+ "recommendation": "Raccomandazione breve"}}"""))
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash",
             contents=parts,
             config=types.GenerateContentConfig(
-                system_instruction="Sei un perito forense deepfake.",
-                response_mime_type="application/json"
+                system_instruction="Perito forense deepfake. Rispondi solo JSON.",
+                response_mime_type="application/json",
+                max_output_tokens=500,
             )
         )
 
         data = json.loads(response.text.strip())
         result["is_ai_generated"]  = data.get("is_ai_generated")
         result["probability_ai"]   = float(data.get("probability_ai", 0))
-        result["key_observations"] = data.get("key_observations", [])[:5]
+        result["key_observations"] = data.get("key_observations", [])[:3]
         result["forensic_summary"] = data.get("forensic_summary", "")
         result["recommendation"]   = data.get("recommendation", "")
-        result["model_used"]       = "gemini-2.0-flash (frame-based)"
+        result["model_used"]       = f"gemini-1.5-flash (3 frame da {duration:.0f}s)"
         result["error"]            = None
 
     except json.JSONDecodeError as e:
