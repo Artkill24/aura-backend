@@ -30,6 +30,7 @@ from app.utils.link_analyzer import download_video, extract_video_info, is_suppo
 from app.analyzers.semantic_ai import analyze_semantic, analyze_generative_origin
 from app.analyzers.c2pa import check_c2pa
 from app.analyzers.temporal_coherence import analyze_temporal_coherence
+from app.analyzers.gemini_observer import analyze_with_gemini_observer
 from app.utils.qr_verify import save_qr_png
 from app.analyzers.rppg import analyze_rppg
 from app.report.generator import generate_pdf_report
@@ -292,6 +293,8 @@ async def analyze_link(
         vcam_result     = analyze_virtual_cam(video_path)
         rppg_result     = analyze_rppg(video_path)
 
+        gemini_result = await analyze_with_gemini_observer(str(video_path))
+
         verdict  = compute_verdict(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, c2pa_result, temporal_result)
         forensic = get_forensic_conclusion(metadata_result, visual_result, audio_result, signal_result, moire_result, prnu_result, vcam_result, rppg_result, verdict)
         elapsed  = 0
@@ -379,6 +382,7 @@ async def analyze_link(
         "c2pa":         c2pa_result,
             "generative_origin": gen_origin,
         "temporal_coherence": temporal_result,
+        "layer_12_gemini": gemini_result,
         "pdf_url": pdf_link_url if pdf_link_url else None,
         "report_url":   f"/report/{job_id}",
         "verify_url":   verify_url,

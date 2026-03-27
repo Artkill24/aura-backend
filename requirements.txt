@@ -32,3 +32,5 @@ yt-dlp
 web3
 py-solc-x
 supabase
+# google-generativeai (deprecated)
+google-genai

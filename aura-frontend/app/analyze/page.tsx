@@ -1,4 +1,7 @@
 "use client";
+import { useEffect } from "react";
+import { useRouter as useRouter2 } from "next/navigation";
+import { supabase } from "../../lib/supabase";
 import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
@@ -43,6 +46,11 @@ export default function AnalyzePage() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef   = useRef<Blob[]>([]);
   const router      = useRouter();
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) router.push("/login?redirect=/analyze");
+    });
+  }, [router]);
 
   const CYAN = "#00e5ff";
   const RED  = "#ff2d55";

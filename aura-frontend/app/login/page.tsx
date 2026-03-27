@@ -15,6 +15,16 @@ function LoginContent() {
   const router       = useRouter();
   const CYAN = "#00e5ff";
 
+  // Ascolta cambio stato auth e reindirizza
+  useState(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+        router.push(redirect);
+      }
+    });
+    return () => subscription.unsubscribe();
+  });
+
   const handleGoogle = async () => {
     setLoading(true); setError("");
     const { error } = await supabase.auth.signInWithOAuth({
