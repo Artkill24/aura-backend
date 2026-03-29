@@ -92,7 +92,7 @@ def download_video(url: str, output_dir: str, tier: str = "free") -> Dict[str, A
         out_template = str(Path(output_dir) / "link_%(id)s.%(ext)s")
 
         ydl_opts = {
-            "format":           "bestvideo[height<=720][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=480][vcodec^=avc]+bestaudio/best[height<=480][ext=mp4]/best[ext=mp4]/best",
+            "format":           "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
             "format_sort":      ["vcodec:h264", "ext:mp4:m4a"],
             "outtmpl":          out_template,
             "quiet":            True,
