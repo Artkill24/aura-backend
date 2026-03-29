@@ -31,6 +31,7 @@ from app.analyzers.semantic_ai import analyze_semantic, analyze_generative_origi
 from app.analyzers.c2pa import check_c2pa
 from app.analyzers.temporal_coherence import analyze_temporal_coherence
 from app.analyzers.gemini_observer import analyze_with_gemini_observer
+from app.routers.quick_scan import router as quick_router
 from app.utils.qr_verify import save_qr_png
 from app.analyzers.rppg import analyze_rppg
 from app.report.generator import generate_pdf_report
@@ -40,6 +41,7 @@ app = FastAPI(
     description="Deepfake & Media Authenticity Analysis Engine",
     version="0.3.0",
 )
+app.include_router(quick_router)
 
 app.add_middleware(
     CORSMiddleware,
