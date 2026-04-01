@@ -98,7 +98,14 @@ def download_video(url: str, output_dir: str, tier: str = "free") -> Dict[str, A
             "quiet":            True,
             "no_warnings":      True,
             "nocheckcertificate": True,
-            "proxy": f"http://{os.environ.get('PROXY_USER','')}:{os.environ.get('PROXY_PASS','')}@{os.environ.get('PROXY_HOST','')}:{os.environ.get('PROXY_PORT','')}/" if os.environ.get("PROXY_HOST") else None,
+            "proxy": (lambda u,p,h,port: f"http://{u}:{p}@{h}:{port}/" if h else None)(
+                os.environ.get("PROXY_USER",""),
+                os.environ.get("PROXY_PASS",""),
+                os.environ.get("PROXY_HOST",""),
+                os.environ.get("PROXY_PORT","823")
+            ),
+            "username": None,
+            "password": None,
             "cookiefile":        cookies_path if os.path.exists(cookies_path) else None,
             "geo_bypass":        True,
             "sleep_interval":    1,
