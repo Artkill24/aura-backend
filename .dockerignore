@@ -1,0 +1,8 @@
+.env
+venv/
+outputs/
+temp/
+__pycache__/
+*.pyc
+.git/
+aura-frontend/
