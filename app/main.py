@@ -195,6 +195,7 @@ async def analyze_video(
                 "visual": visual_result.get("deepfake_probability",0),
             }
         )
+        verdict = reconcile_verdict(verdict, gen_origin)
         generate_pdf_report(
             output_path=str(report_path),
             job_id=job_id,
@@ -320,6 +321,7 @@ async def analyze_link(
             video_path=video_path,
             layer_scores=layer_scores,
         )
+        verdict = reconcile_verdict(verdict, gen_origin)
 
         # Semantic AI (Qwen2-VL o Groq fallback)
         semantic = analyze_semantic(
@@ -393,13 +395,28 @@ async def analyze_link(
 @app.get("/report/{job_id}")
 def get_report(job_id: str):
     report_path = OUTPUT_DIR / f"AURA_Report_{job_id}.pdf"
-    if not report_path.exists():
-        raise HTTPException(status_code=404, detail="Report not found or expired")
-    return FileResponse(
-        path=str(report_path),
-        media_type="application/pdf",
-        filename=f"AURA_Report_{job_id}.pdf",
-    )
+    if report_path.exists():
+        return FileResponse(
+            path=str(report_path),
+            media_type="application/pdf",
+            filename=f"AURA_Report_{job_id}.pdf",
+        )
+    # Fallback: il filesystem Fargate e' effimero, ma il PDF durevole vive su Supabase.
+    try:
+        from supabase import create_client
+        sb = create_client(
+            os.environ.get("SUPABASE_URL", "https://vtqrojazozbqbhgozbor.supabase.co"),
+            os.environ.get("SUPABASE_KEY", ""),
+        )
+        url = sb.storage.from_("aura-reports").get_public_url(f"AURA_Report_{job_id}.pdf")
+        import httpx
+        resp = httpx.head(url, timeout=10)
+        if resp.status_code == 200:
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url)
+    except Exception as e:
+        logging.warning(f"Supabase report fallback failed: {e}")
+    raise HTTPException(status_code=404, detail="Report not found or expired")
 
 
 
@@ -474,6 +491,43 @@ async def verify_report(job_id: str, h: str = ""):
         "engine": "AURA Reality Firewall v0.7.0",
         "message": "✅ Report autentico — hash verificato." if hash_match else "⚠️ Hash non corrispondente — report potrebbe essere stato modificato.",
     }
+
+
+
+def reconcile_verdict(verdict: dict, gen_origin: dict) -> dict:
+    """
+    Layer 10 disagreement handling.
+    Se il Generative Origin Detector contraddice fortemente il composite
+    verdict (AI-PRODUCED ad alta probabilita' vs AUTHENTIC), il verdetto
+    degrada a CONFLICTING SIGNALS invece di presentare due conclusioni
+    opposte nello stesso report.
+    """
+    if not verdict or not gen_origin or gen_origin.get("error"):
+        return verdict
+
+    prob_ai = gen_origin.get("probability_ai") or 0.0
+    origin  = (gen_origin.get("origin_verdict") or "").upper()
+    conf    = str(gen_origin.get("confidence", "")).upper()
+    label   = verdict.get("label", "")
+
+    strong_ai_signal = (
+        origin == "AI-PRODUCED"
+        and prob_ai >= 0.80
+        and conf in ("HIGH", "")
+    )
+
+    if strong_ai_signal and "AUTHENTIC" in label:
+        verdict["label"] = "CONFLICTING SIGNALS"
+        verdict["color"] = "orange"
+        verdict["composite_score"] = max(verdict.get("composite_score", 0.0), 0.50)
+        verdict["confidence_level"] = "LOW"
+        verdict["interpretation"] = (
+            "I layer forensi classici non rilevano manipolazione, ma il "
+            "Generative Origin Detector indica AI-PRODUCED al "
+            f"{prob_ai:.0%}. Segnali in disaccordo: revisione manuale consigliata."
+        )
+        verdict["reconciled"] = True
+    return verdict
 
 
 def compute_verdict(metadata: dict, visual: dict, audio: dict, signal: dict, moire: dict, prnu: dict = None, vcam: dict = None, rppg: dict = None, c2pa_result: dict = None, temporal: dict = None) -> dict:
