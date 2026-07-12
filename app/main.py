@@ -25,6 +25,7 @@ from app.analyzers.heatmap import generate_forensic_heatmaps
 from app.analyzers.forensic_inference import get_forensic_conclusion
 from app.analyzers.ai_narrative import generate_forensic_narrative
 from app.utils.blockchain import notarize_report, verify_on_chain
+from app.utils.memory import job_start, job_done, job_failed
 from app.utils.feedback import save_feedback, run_prompt_refinement
 from app.utils.link_analyzer import download_video, extract_video_info, is_supported_url
 from app.analyzers.semantic_ai import analyze_semantic, analyze_generative_origin
@@ -125,6 +126,7 @@ async def analyze_video(
         )
 
     job_id = str(uuid.uuid4())
+    # memoria forense: registra il job (fail-open)
     ext = Path(file.filename).suffix or ".mp4"
     video_path = UPLOAD_DIR / f"{job_id}{ext}"
     report_path = OUTPUT_DIR / f"AURA_Report_{job_id}.pdf"
@@ -144,9 +146,11 @@ async def analyze_video(
     start = time.time()
     pdf_public_url = ""
     gen_origin = {}
+    similar_detections = []
     try:
         import hashlib as _hl
         file_sha256 = _hl.sha256(open(video_path,"rb").read()).hexdigest()
+        job_start(job_id, getattr(file, 'filename', str(video_path)), str(video_path))
         temporal_result = analyze_temporal_coherence(str(video_path))
         c2pa_result     = check_c2pa(str(video_path))
         metadata_result = analyze_metadata(str(video_path))
@@ -222,13 +226,16 @@ async def analyze_video(
 
         # Upload PDF su Supabase Storage
         pdf_public_url = upload_pdf_to_supabase(str(report_path), job_id)
+        similar_detections = job_done(job_id, verdict, gen_origin, pdf_public_url, str(video_path))
     except Exception as e:
+        job_failed(job_id, str(e))
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
     finally:
         background_tasks.add_task(cleanup_file, str(video_path))
 
     return JSONResponse({
         "job_id": job_id,
+        "similar_detections": similar_detections,
         "filename": file.filename,
         "analysis_time_seconds": elapsed,
         "verdict": verdict,
@@ -270,6 +277,8 @@ async def analyze_link(
         raise HTTPException(status_code=400, detail=f"URL non supportato. Piattaforme: YouTube, X, TikTok, Vimeo, Instagram")
 
     job_id   = str(uuid.uuid4())
+    similar_detections = []
+    # memoria forense: registra il job (fail-open)
     tmp_dir  = tempfile.mkdtemp()
     report_path = OUTPUT_DIR / f"{job_id}.pdf"
 
@@ -363,6 +372,7 @@ async def analyze_link(
         )
 
         pdf_link_url = upload_pdf_to_supabase(str(report_path), job_id)
+        similar_detections = job_done(job_id, verdict, gen_origin, pdf_link_url, str(video_path))
 
         # Salva meta per /verify
         import json as _json
@@ -372,12 +382,14 @@ async def analyze_link(
     except HTTPException:
         raise
     except Exception as e:
+        job_failed(job_id, str(e))
         raise HTTPException(status_code=500, detail=f"Link analysis failed: {str(e)}")
     finally:
         background_tasks.add_task(cleanup_file, tmp_dir)
 
     return JSONResponse({
         "job_id":       job_id,
+        "similar_detections": similar_detections,
         "url":          url,
         "video_info":   video_info,
         "verdict":      verdict,

@@ -34,3 +34,5 @@ py-solc-x
 supabase
 # google-generativeai (deprecated)
 google-genai
+psycopg[binary]
+boto3
